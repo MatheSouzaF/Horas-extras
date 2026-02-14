@@ -7,6 +7,8 @@ import { StatisticsPanel } from "./components/StatisticsPanel";
 import { UserSession } from "./components/UserSession";
 import { ApiError, apiRequest, refreshSession } from "./services/api";
 import type { AuthUser, DayEntry, Salary, Totals } from "./types";
+import { generateId } from "@/utils/uuid";
+
 import "./App.css";
 
 const SESSION_STORAGE_KEY = "controle-mensal-horas-extras:session";
@@ -44,7 +46,7 @@ type HoursResponse = {
 type AppTab = "days" | "stats";
 
 const createEmptyDay = (): DayEntry => ({
-  id: crypto.randomUUID(),
+  id: generateId(),
   date: "",
   startTime: "",
   endTime: "",
@@ -103,7 +105,7 @@ const normalizeDays = (days: HoursResponse["days"]): DayEntry[] => {
   }
 
   return days.map((day) => ({
-    id: day.id ?? crypto.randomUUID(),
+    id: day.id ?? generateId(),
     date: day.date,
     startTime: day.startTime,
     endTime: day.endTime,
@@ -340,10 +342,7 @@ function App() {
   };
 
   const handleAddDay = (entry: Omit<DayEntry, "id">) => {
-    setDays((currentDays) => [
-      ...currentDays,
-      { ...entry, id: crypto.randomUUID() },
-    ]);
+    setDays((currentDays) => [...currentDays, { ...entry, id: generateId() }]);
   };
 
   const handleRemoveDay = (id: string) => {
