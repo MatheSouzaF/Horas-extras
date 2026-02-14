@@ -7,7 +7,7 @@ import { StatisticsPanel } from "./components/StatisticsPanel";
 import { UserSession } from "./components/UserSession";
 import { ApiError, apiRequest, refreshSession } from "./services/api";
 import type { AuthUser, DayEntry, Salary, Totals } from "./types";
-import { generateId } from "@/utils/uuid";
+import { generateId } from "./utils/uuid";
 
 import "./App.css";
 
