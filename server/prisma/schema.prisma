@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  monthlyRecords MonthlyRecord[]
+  refreshSessions RefreshSession[]
+}
+
+model MonthlyRecord {
+  id        String     @id @default(cuid())
+  userId    String
+  month     String
+  salary    Float      @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayEntries DayEntry[]
+
+  @@unique([userId, month])
+}
+
+model DayEntry {
+  id              String       @id @default(cuid())
+  monthlyRecordId String
+  date            DateTime
+  startTime       String
+  endTime         String
+  projectWorked   String       @default("")
+  workedHours     Float        @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  monthlyRecord   MonthlyRecord @relation(fields: [monthlyRecordId], references: [id], onDelete: Cascade)
+}
+
+model RefreshSession {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String
+  deviceName  String?
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
