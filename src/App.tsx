@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { AuthPanel } from "./components/AuthPanel";
 import {
   CalculationSettings,
@@ -72,6 +74,37 @@ const brlFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 const formatCurrency = (value: number) => brlFormatter.format(value);
+
+const formatDateToBr = (date: string): string => {
+  if (!date) {
+    return "";
+  }
+
+  const [year, month, day] = date.split("-");
+
+  if (!year || !month || !day) {
+    return date;
+  }
+
+  return `${day}/${month}/${year}`;
+};
+
+const sanitizeFileNamePart = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+
+const formatUserName = (name: string): string =>
+  name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 
 const getDayIdentity = (
   day: Pick<DayEntry, "date" | "startTime" | "endTime" | "projectWorked">,
@@ -842,6 +875,92 @@ function App() {
     setSession(null);
   };
 
+  const handleDownloadProjectPdf = (projectLabel: string) => {
+    if (!session) {
+      return;
+    }
+
+    const normalizedProject = projectLabel.trim() || "Sem projeto";
+
+    const projectDays = days
+      .filter((day) => day.date && day.startTime && day.endTime)
+      .map((day) => {
+        const workedHours = calculateWorkedHours(day.startTime, day.endTime);
+
+        return {
+          ...day,
+          workedHours,
+          normalizedProject: day.projectWorked.trim() || "Sem projeto",
+        };
+      })
+      .filter(
+        (day) =>
+          day.workedHours > 0 && day.normalizedProject === normalizedProject,
+      )
+      .sort((dayA, dayB) => {
+        const dateCompare = dayA.date.localeCompare(dayB.date);
+
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+
+        return dayA.startTime.localeCompare(dayB.startTime);
+      });
+
+    if (projectDays.length === 0) {
+      return;
+    }
+
+    const doc = new jsPDF({
+      unit: "pt",
+      format: "a4",
+    });
+
+    const userName = formatUserName(session.user.name);
+
+    doc.setFontSize(17);
+    doc.text(userName, 40, 48);
+
+    doc.setFontSize(12);
+    doc.text(`Horas trabalhadas no ${normalizedProject}`, 40, 70);
+
+    autoTable(doc, {
+      startY: 90,
+      head: [["Data", "Início", "Fim", "Horas"]],
+      body: projectDays.map((day) => [
+        formatDateToBr(day.date),
+        day.startTime,
+        day.endTime,
+        `${day.workedHours.toFixed(2)} h`,
+      ]),
+      theme: "grid",
+      styles: {
+        fontSize: 10,
+      },
+      headStyles: {
+        fillColor: [31, 41, 55],
+      },
+    });
+
+    const totalHours = projectDays.reduce(
+      (accumulator, day) => accumulator + day.workedHours,
+      0,
+    );
+
+    const lastY = (doc as jsPDF & { lastAutoTable?: { finalY: number } })
+      .lastAutoTable?.finalY;
+
+    doc.setFontSize(11);
+    doc.text(
+      `Total de horas: ${totalHours.toFixed(2)} h`,
+      40,
+      (lastY ?? 90) + 24,
+    );
+
+    const safeProject = sanitizeFileNamePart(normalizedProject) || "projeto";
+    doc.save(`horas-${safeProject}-${selectedMonth}.pdf`);
+  };
+
   return (
     <main className="container">
       <header className="header">
@@ -976,10 +1095,23 @@ function App() {
                               key={item.label}
                               className="inline-project-summary-item"
                             >
-                              <p>
-                                <strong>{item.label}</strong>
-                                <span>{item.hours.toFixed(2)} h</span>
-                              </p>
+                              <div className="inline-project-summary-item-header">
+                                <p>
+                                  <strong>{item.label}</strong>
+                                  <span>{item.hours.toFixed(2)} h</span>
+                                </p>
+                                <button
+                                  type="button"
+                                  className="project-download-button"
+                                  onClick={() =>
+                                    handleDownloadProjectPdf(item.label)
+                                  }
+                                  aria-label={`Baixar PDF de ${item.label}`}
+                                  title="Baixar PDF"
+                                >
+                                  ⬇
+                                </button>
+                              </div>
                               <p>
                                 <span>Total calculado</span>
                                 <strong>
