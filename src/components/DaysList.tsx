@@ -6,6 +6,7 @@ import { STANDARD_MODEL_ID } from "./CalculationSettings";
 type DaysListProps = {
   days: DayEntryType[];
   calculationModels: CalculationModel[];
+  dayValuesById: Record<string, number>;
   onEditDay: (entry: DayEntryType) => void;
   onRemoveDay: (id: string) => void;
   onAddDay: (entry: Omit<DayEntryType, "id">) => void;
@@ -24,6 +25,7 @@ const createEmptyForm = (): DayFormState => ({
 export function DaysList({
   days,
   calculationModels,
+  dayValuesById,
   onEditDay,
   onRemoveDay,
   onAddDay,
@@ -133,7 +135,7 @@ export function DaysList({
       </div>
 
       <div className="days-grid">
-        {days.map((entry) => (
+        {[...days].reverse().map((entry) => (
           <DayEntry
             key={entry.id}
             entry={entry}
@@ -142,6 +144,7 @@ export function DaysList({
                 (model) => model.id === entry.calculationModelId,
               )?.name ?? "-"
             }
+            dayValue={dayValuesById[entry.id] ?? 0}
             onEdit={openEditModal}
             onRemove={onRemoveDay}
           />

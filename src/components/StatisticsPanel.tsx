@@ -13,6 +13,8 @@ type StatisticsPanelProps = {
   dayHours: ChartItem[];
   projectHours: ChartItem[];
   projectSummary: ProjectSummaryItem[];
+  averageDailyHours: number;
+  workedDaysCount: number;
 };
 
 const formatHours = (value: number) => `${value.toFixed(2)} h`;
@@ -88,9 +90,29 @@ export function StatisticsPanel({
   dayHours,
   projectHours,
   projectSummary,
+  averageDailyHours,
+  workedDaysCount,
 }: StatisticsPanelProps) {
   return (
     <div className="stats-grid">
+      <section className="card daily-average-board">
+        <h2>Média Diária de Horas</h2>
+
+        {workedDaysCount === 0 ? (
+          <p className="hint">Sem dias completos para calcular a média.</p>
+        ) : (
+          <>
+            <strong className="daily-average-value">
+              {formatHours(averageDailyHours)}
+            </strong>
+            <p className="hint">
+              Baseado em {workedDaysCount} dia{workedDaysCount > 1 ? "s" : ""}{" "}
+              completo{workedDaysCount > 1 ? "s" : ""}.
+            </p>
+          </>
+        )}
+      </section>
+
       <ChartCard
         title="Gráfico de Dias"
         items={dayHours}

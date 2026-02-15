@@ -314,6 +314,17 @@ button:hover {
   grid-column: 1 / -1;
 }
 
+.day-entry-footer {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.day-meta-model {
+  flex: 1;
+}
+
 .day-entry-actions {
   display: flex;
   gap: 0.5rem;
@@ -406,6 +417,16 @@ button:hover {
 .stats-grid {
   display: grid;
   gap: 1rem;
+}
+
+.daily-average-board {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.daily-average-value {
+  font-size: 2rem;
+  line-height: 1;
 }
 
 .chart-vertical {

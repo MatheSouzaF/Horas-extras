@@ -280,7 +280,7 @@ function App() {
   const [isSyncReady, setIsSyncReady] = useState(false);
   const [salary, setSalary] = useState<Salary>(() => loadInitialState().salary);
   const [days, setDays] = useState<DayEntry[]>(() => loadInitialState().days);
-  const [activeTab, setActiveTab] = useState<AppTab>("config");
+  const [activeTab, setActiveTab] = useState<AppTab>("days");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() =>
     loadSelectedMonth(),
@@ -586,6 +586,19 @@ function App() {
       .map(([label, hours]) => ({ label, hours }));
   }, [days]);
 
+  const averageDailyHours = useMemo(() => {
+    if (dayHoursChart.length === 0) {
+      return 0;
+    }
+
+    const totalHours = dayHoursChart.reduce(
+      (accumulator, dayItem) => accumulator + dayItem.hours,
+      0,
+    );
+
+    return totalHours / dayHoursChart.length;
+  }, [dayHoursChart]);
+
   const projectHoursChart = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -648,6 +661,19 @@ function App() {
         hours: data.hours,
         totalValue: data.totalValue,
       }));
+  }, [days, salary, calculationModels]);
+
+  const dayValuesById = useMemo<Record<string, number>>(() => {
+    const modelMap = new Map(
+      calculationModels.map((model) => [model.id, model]),
+    );
+    const valorHora = salary / 160;
+    const hourlyValue = Number.isFinite(valorHora) ? valorHora : 0;
+
+    return days.reduce<Record<string, number>>((accumulator, day) => {
+      accumulator[day.id] = getDayValue(day, modelMap, hourlyValue);
+      return accumulator;
+    }, {});
   }, [days, salary, calculationModels]);
 
   const handleDayEdit = (updatedEntry: DayEntry) => {
@@ -870,18 +896,6 @@ function App() {
               <button
                 type="button"
                 className={
-                  activeTab === "config" ? "tab-button active" : "tab-button"
-                }
-                onClick={() => {
-                  setActiveTab("config");
-                  setIsSidebarOpen(false);
-                }}
-              >
-                Configuração
-              </button>
-              <button
-                type="button"
-                className={
                   activeTab === "days" ? "tab-button active" : "tab-button"
                 }
                 onClick={() => {
@@ -889,7 +903,7 @@ function App() {
                   setIsSidebarOpen(false);
                 }}
               >
-                Dias
+                Calcule
               </button>
               <button
                 type="button"
@@ -902,6 +916,18 @@ function App() {
                 }}
               >
                 Estatísticas
+              </button>
+              <button
+                type="button"
+                className={
+                  activeTab === "config" ? "tab-button active" : "tab-button"
+                }
+                onClick={() => {
+                  setActiveTab("config");
+                  setIsSidebarOpen(false);
+                }}
+              >
+                Configuração
               </button>
             </aside>
 
@@ -970,6 +996,7 @@ function App() {
                   <DaysList
                     days={days}
                     calculationModels={calculationModels}
+                    dayValuesById={dayValuesById}
                     onEditDay={handleDayEdit}
                     onRemoveDay={handleRemoveDay}
                     onAddDay={handleAddDay}
@@ -982,6 +1009,8 @@ function App() {
                   dayHours={dayHoursChart}
                   projectHours={projectHoursChart}
                   projectSummary={projectSummary}
+                  averageDailyHours={averageDailyHours}
+                  workedDaysCount={dayHoursChart.length}
                 />
               ) : null}
             </section>
