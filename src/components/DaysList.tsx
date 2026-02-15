@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DayEntry } from "./DayEntry";
 import type { CalculationModel, DayEntry as DayEntryType } from "../types";
+import { STANDARD_MODEL_ID } from "./CalculationSettings";
 
 type DaysListProps = {
   days: DayEntryType[];
@@ -222,7 +223,9 @@ export function DaysList({
               >
                 {calculationModels.map((model) => (
                   <option key={model.id} value={model.id}>
-                    {model.name} ({model.multiplier.toFixed(2)}x)
+                    {model.id === STANDARD_MODEL_ID
+                      ? `${model.name} (regra automática)`
+                      : `${model.name} (${model.multiplier.toFixed(2)}x)`}
                   </option>
                 ))}
               </select>

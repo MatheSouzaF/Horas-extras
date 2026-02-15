@@ -35,11 +35,13 @@ const calculateWorkedHours = (startTime: string, endTime: string): number => {
   const start = toMinutes(startTime);
   const end = toMinutes(endTime);
 
-  if (end <= start) {
+  if (end === start) {
     return 0;
   }
 
-  return (end - start) / 60;
+  const resolvedEnd = end < start ? end + 24 * 60 : end;
+
+  return (resolvedEnd - start) / 60;
 };
 
 hoursRoutes.get("/", ensureAuth, async (request: AuthRequest, response) => {

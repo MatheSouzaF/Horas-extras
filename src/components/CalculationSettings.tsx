@@ -1,5 +1,9 @@
 import type { CalculationModel, Salary } from "../types";
 
+export const STANDARD_MODEL_ID = "default-standard";
+export const STANDARD_MODEL_NAME = "CLT Padrão";
+export const STANDARD_MODEL_MULTIPLIER = 1.5;
+
 type CalculationSettingsProps = {
   salary: Salary;
   onSalaryChange: (value: Salary) => void;
@@ -54,6 +58,7 @@ export function CalculationSettings({
               <input
                 type="text"
                 value={model.name}
+                disabled={model.id === STANDARD_MODEL_ID}
                 onChange={(event) =>
                   onUpdateModel(model.id, "name", event.target.value)
                 }
@@ -68,6 +73,7 @@ export function CalculationSettings({
                 min={1}
                 step="0.01"
                 value={model.multiplier || ""}
+                disabled={model.id === STANDARD_MODEL_ID}
                 onChange={(event) =>
                   onUpdateModel(model.id, "multiplier", event.target.value)
                 }
@@ -75,14 +81,16 @@ export function CalculationSettings({
               />
             </label>
 
-            <button
-              type="button"
-              className="remove-button"
-              onClick={() => onRemoveModel(model.id)}
-              disabled={models.length <= 1}
-            >
-              Remover
-            </button>
+            {model.id !== STANDARD_MODEL_ID ? (
+              <button
+                type="button"
+                className="remove-button"
+                onClick={() => onRemoveModel(model.id)}
+                disabled={models.length <= 1}
+              >
+                Remover
+              </button>
+            ) : null}
           </article>
         ))}
       </div>
@@ -91,6 +99,10 @@ export function CalculationSettings({
 }
 
 export const createDefaultModels = (): CalculationModel[] => [
-  { id: "default-50", name: "Hora Extra 50%", multiplier: 1.5 },
+  {
+    id: STANDARD_MODEL_ID,
+    name: STANDARD_MODEL_NAME,
+    multiplier: STANDARD_MODEL_MULTIPLIER,
+  },
   { id: "default-100", name: "Hora Extra 100%", multiplier: 2 },
 ];

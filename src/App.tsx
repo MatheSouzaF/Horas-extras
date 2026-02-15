@@ -3,6 +3,9 @@ import { AuthPanel } from "./components/AuthPanel";
 import {
   CalculationSettings,
   createDefaultModels,
+  STANDARD_MODEL_ID,
+  STANDARD_MODEL_MULTIPLIER,
+  STANDARD_MODEL_NAME,
 } from "./components/CalculationSettings";
 import { DaysList } from "./components/DaysList";
 import { Summary } from "./components/Summary";
@@ -83,6 +86,9 @@ const createEmptyDay = (): DayEntry => ({
   calculationModelId: "",
 });
 
+const NIGHT_START_MINUTES = 22 * 60;
+const NIGHT_END_MINUTES = 8 * 60;
+
 const toMinutes = (time: string): number => {
   if (!time) {
     return 0;
@@ -100,11 +106,93 @@ const calculateWorkedHours = (startTime: string, endTime: string): number => {
   const start = toMinutes(startTime);
   const end = toMinutes(endTime);
 
-  if (end <= start) {
+  if (end === start) {
     return 0;
   }
 
-  return (end - start) / 60;
+  const resolvedEnd = end < start ? end + 24 * 60 : end;
+
+  return (resolvedEnd - start) / 60;
+};
+
+const getDayOfWeek = (date: string, offset = 0): number => {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + offset)).getUTCDay();
+};
+
+const isWeekend = (date: string, offset = 0): boolean => {
+  const dayOfWeek = getDayOfWeek(date, offset);
+  return dayOfWeek === 0 || dayOfWeek === 6;
+};
+
+const isNightMinute = (minuteOfDay: number): boolean =>
+  minuteOfDay >= NIGHT_START_MINUTES || minuteOfDay < NIGHT_END_MINUTES;
+
+const calculateStandardModelValue = (
+  day: DayEntry,
+  hourlyValue: number,
+  baseMultiplier: number,
+): number => {
+  if (!day.date || !day.startTime || !day.endTime) {
+    return 0;
+  }
+
+  const start = toMinutes(day.startTime);
+  const end = toMinutes(day.endTime);
+
+  if (start === end) {
+    return 0;
+  }
+
+  let cursor = start;
+  const resolvedEnd = end < start ? end + 24 * 60 : end;
+  let total = 0;
+
+  while (cursor < resolvedEnd) {
+    const dayOffset = Math.floor(cursor / (24 * 60));
+    const minuteOfDay = cursor % (24 * 60);
+    const currentDayStart = cursor - minuteOfDay;
+
+    const nextCutoff =
+      minuteOfDay < NIGHT_END_MINUTES
+        ? currentDayStart + NIGHT_END_MINUTES
+        : minuteOfDay < NIGHT_START_MINUTES
+          ? currentDayStart + NIGHT_START_MINUTES
+          : currentDayStart + 24 * 60;
+
+    const chunkEnd = Math.min(nextCutoff, resolvedEnd);
+    const chunkHours = (chunkEnd - cursor) / 60;
+    const multiplier =
+      isWeekend(day.date, dayOffset) || isNightMinute(minuteOfDay)
+        ? 2
+        : baseMultiplier;
+
+    total += chunkHours * hourlyValue * multiplier;
+    cursor = chunkEnd;
+  }
+
+  return total;
+};
+
+const getDayValue = (
+  day: DayEntry,
+  modelMap: Map<string, CalculationModel>,
+  hourlyValue: number,
+): number => {
+  const workedHours = calculateWorkedHours(day.startTime, day.endTime);
+
+  if (workedHours <= 0) {
+    return 0;
+  }
+
+  const model = modelMap.get(day.calculationModelId);
+
+  if (model?.id === STANDARD_MODEL_ID) {
+    return calculateStandardModelValue(day, hourlyValue, model.multiplier);
+  }
+
+  const multiplier = model?.multiplier ?? 1;
+  return workedHours * hourlyValue * multiplier;
 };
 
 const loadInitialState = (): StoredState => {
@@ -161,6 +249,26 @@ const loadSession = (): AuthSession | null => {
   } catch {
     return null;
   }
+};
+
+const ensureStandardModel = (
+  models: CalculationModel[],
+): CalculationModel[] => {
+  const standard = models.find((model) => model.id === STANDARD_MODEL_ID);
+  const normalizedStandard: CalculationModel = {
+    id: STANDARD_MODEL_ID,
+    name: STANDARD_MODEL_NAME,
+    multiplier: STANDARD_MODEL_MULTIPLIER,
+  };
+
+  if (standard) {
+    return [
+      normalizedStandard,
+      ...models.filter((model) => model.id !== STANDARD_MODEL_ID),
+    ];
+  }
+
+  return [normalizedStandard, ...models];
 };
 
 function App() {
@@ -274,7 +382,9 @@ function App() {
         }));
 
       setCalculationModels(
-        normalized.length > 0 ? normalized : createDefaultModels(),
+        normalized.length > 0
+          ? ensureStandardModel(normalized)
+          : createDefaultModels(),
       );
     } catch {
       setCalculationModels(createDefaultModels());
@@ -441,16 +551,12 @@ function App() {
       calculationModels.map((model) => [model.id, model]),
     );
 
-    const totalValue = days.reduce((accumulator, day) => {
-      const workedHours = calculateWorkedHours(day.startTime, day.endTime);
-
-      if (workedHours <= 0) {
-        return accumulator;
-      }
-
-      const multiplier = modelMap.get(day.calculationModelId)?.multiplier ?? 1;
-      return accumulator + workedHours * valorHora * multiplier;
-    }, 0);
+    const totalValue = days.reduce(
+      (accumulator, day) =>
+        accumulator +
+        getDayValue(day, modelMap, Number.isFinite(valorHora) ? valorHora : 0),
+      0,
+    );
 
     return {
       totalHours,
@@ -522,12 +628,16 @@ function App() {
       }
 
       const label = day.projectWorked.trim() || "Sem projeto";
-      const multiplier = modelMap.get(day.calculationModelId)?.multiplier ?? 1;
       const current = projectMap.get(label) ?? { hours: 0, totalValue: 0 };
+      const value = getDayValue(
+        day,
+        modelMap,
+        Number.isFinite(valorHora) ? valorHora : 0,
+      );
 
       projectMap.set(label, {
         hours: current.hours + workedHours,
-        totalValue: current.totalValue + workedHours * valorHora * multiplier,
+        totalValue: current.totalValue + value,
       });
     });
 
@@ -584,6 +694,14 @@ function App() {
           return model;
         }
 
+        if (id === STANDARD_MODEL_ID) {
+          return {
+            ...model,
+            name: STANDARD_MODEL_NAME,
+            multiplier: STANDARD_MODEL_MULTIPLIER,
+          };
+        }
+
         if (field === "name") {
           return { ...model, name: value };
         }
@@ -597,6 +715,10 @@ function App() {
   };
 
   const handleRemoveModel = (id: string) => {
+    if (id === STANDARD_MODEL_ID) {
+      return;
+    }
+
     setCalculationModels((current) => {
       if (current.length <= 1) {
         return current;
