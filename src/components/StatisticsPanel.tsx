@@ -3,12 +3,26 @@ type ChartItem = {
   hours: number;
 };
 
+type ProjectSummaryItem = {
+  label: string;
+  hours: number;
+  totalValue: number;
+};
+
 type StatisticsPanelProps = {
   dayHours: ChartItem[];
   projectHours: ChartItem[];
+  projectSummary: ProjectSummaryItem[];
 };
 
 const formatHours = (value: number) => `${value.toFixed(2)} h`;
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(value);
 
 type ChartCardProps = {
   title: string;
@@ -73,6 +87,7 @@ function ChartCard({
 export function StatisticsPanel({
   dayHours,
   projectHours,
+  projectSummary,
 }: StatisticsPanelProps) {
   return (
     <div className="stats-grid">
@@ -87,6 +102,36 @@ export function StatisticsPanel({
         emptyText="Sem projetos completos para exibir."
         colorfulBars
       />
+
+      <section className="card">
+        <h2>Resumo por Projeto</h2>
+
+        {projectSummary.length === 0 ? (
+          <p className="hint">
+            Preencha dias completos para comparar os freelas.
+          </p>
+        ) : (
+          <div className="project-summary-list">
+            {projectSummary.map((item, index) => (
+              <article key={item.label} className="project-summary-item">
+                <div className="project-summary-header">
+                  <strong>
+                    {index + 1}. {item.label}
+                  </strong>
+                  <span>{formatHours(item.hours)}</span>
+                </div>
+
+                <div className="project-summary-values">
+                  <p>
+                    <span>Total calculado</span>
+                    <strong>{formatCurrency(item.totalValue)}</strong>
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

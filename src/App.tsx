@@ -1,18 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { AuthPanel } from "./components/AuthPanel";
+import {
+  CalculationSettings,
+  createDefaultModels,
+} from "./components/CalculationSettings";
 import { DaysList } from "./components/DaysList";
-import { SalaryInput } from "./components/SalaryInput";
 import { Summary } from "./components/Summary";
 import { StatisticsPanel } from "./components/StatisticsPanel";
 import { UserSession } from "./components/UserSession";
 import { ApiError, apiRequest, refreshSession } from "./services/api";
-import type { AuthUser, DayEntry, Salary, Totals } from "./types";
+import type {
+  AuthUser,
+  CalculationModel,
+  DayEntry,
+  Salary,
+  Totals,
+} from "./types";
 import { generateId } from "./utils/uuid";
 
 import "./App.css";
 
 const SESSION_STORAGE_KEY = "controle-mensal-horas-extras:session";
 const MONTH_STORAGE_KEY = "controle-mensal-horas-extras:selected-month";
+const MODELS_STORAGE_KEY = "controle-mensal-horas-extras:models";
+const DAY_MODEL_STORAGE_KEY = "controle-mensal-horas-extras:day-model-map";
 
 type StoredState = {
   salary: Salary;
@@ -40,10 +51,28 @@ type HoursResponse = {
     startTime: string;
     endTime: string;
     projectWorked?: string;
+    calculationModelId?: string;
   }>;
 };
 
-type AppTab = "days" | "stats";
+type AppTab = "config" | "days" | "stats";
+
+type ProjectSummaryItem = {
+  label: string;
+  hours: number;
+  totalValue: number;
+};
+
+const brlFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+const formatCurrency = (value: number) => brlFormatter.format(value);
+
+const getDayIdentity = (
+  day: Pick<DayEntry, "date" | "startTime" | "endTime" | "projectWorked">,
+) => `${day.date}|${day.startTime}|${day.endTime}|${day.projectWorked.trim()}`;
 
 const createEmptyDay = (): DayEntry => ({
   id: generateId(),
@@ -51,6 +80,7 @@ const createEmptyDay = (): DayEntry => ({
   startTime: "",
   endTime: "",
   projectWorked: "",
+  calculationModelId: "",
 });
 
 const toMinutes = (time: string): number => {
@@ -110,6 +140,7 @@ const normalizeDays = (days: HoursResponse["days"]): DayEntry[] => {
     startTime: day.startTime,
     endTime: day.endTime,
     projectWorked: day.projectWorked ?? "",
+    calculationModelId: day.calculationModelId ?? "",
   }));
 };
 
@@ -139,11 +170,30 @@ function App() {
   const [isSyncReady, setIsSyncReady] = useState(false);
   const [salary, setSalary] = useState<Salary>(() => loadInitialState().salary);
   const [days, setDays] = useState<DayEntry[]>(() => loadInitialState().days);
-  const [activeTab, setActiveTab] = useState<AppTab>("days");
+  const [activeTab, setActiveTab] = useState<AppTab>("config");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() =>
     loadSelectedMonth(),
   );
+  const [calculationModels, setCalculationModels] = useState<
+    CalculationModel[]
+  >(() => createDefaultModels());
+
+  const modelStorageKey = useMemo(() => {
+    if (!session) {
+      return "";
+    }
+
+    return `${MODELS_STORAGE_KEY}:${session.user.id}:${selectedMonth}`;
+  }, [selectedMonth, session]);
+
+  const dayModelStorageKey = useMemo(() => {
+    if (!session) {
+      return "";
+    }
+
+    return `${DAY_MODEL_STORAGE_KEY}:${session.user.id}:${selectedMonth}`;
+  }, [selectedMonth, session]);
 
   const requestWithRefresh = async <T,>(
     path: string,
@@ -186,6 +236,7 @@ function App() {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       setSalary(0);
       setDays([createEmptyDay()]);
+      setCalculationModels(createDefaultModels());
       setIsSyncReady(false);
       return;
     }
@@ -196,6 +247,83 @@ function App() {
   useEffect(() => {
     localStorage.setItem(MONTH_STORAGE_KEY, selectedMonth);
   }, [selectedMonth]);
+
+  useEffect(() => {
+    if (!modelStorageKey) {
+      return;
+    }
+
+    const saved = localStorage.getItem(modelStorageKey);
+
+    if (!saved) {
+      setCalculationModels(createDefaultModels());
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as CalculationModel[];
+      const normalized = parsed
+        .filter((model) => model.id && model.name.trim())
+        .map((model) => ({
+          ...model,
+          name: model.name.trim(),
+          multiplier:
+            Number(model.multiplier) > 0 ? Number(model.multiplier) : 1,
+        }));
+
+      setCalculationModels(
+        normalized.length > 0 ? normalized : createDefaultModels(),
+      );
+    } catch {
+      setCalculationModels(createDefaultModels());
+    }
+  }, [modelStorageKey]);
+
+  useEffect(() => {
+    if (!modelStorageKey) {
+      return;
+    }
+
+    localStorage.setItem(modelStorageKey, JSON.stringify(calculationModels));
+  }, [calculationModels, modelStorageKey]);
+
+  useEffect(() => {
+    const fallbackModelId = calculationModels[0]?.id;
+
+    if (!fallbackModelId) {
+      return;
+    }
+
+    setDays((currentDays) =>
+      currentDays.map((day) =>
+        day.calculationModelId
+          ? day
+          : { ...day, calculationModelId: fallbackModelId },
+      ),
+    );
+  }, [calculationModels]);
+
+  useEffect(() => {
+    if (!dayModelStorageKey) {
+      return;
+    }
+
+    const dayModelMap = days.reduce<Record<string, string>>((acc, day) => {
+      if (
+        !day.date ||
+        !day.startTime ||
+        !day.endTime ||
+        !day.calculationModelId
+      ) {
+        return acc;
+      }
+
+      acc[getDayIdentity(day)] = day.calculationModelId;
+      return acc;
+    }, {});
+
+    localStorage.setItem(dayModelStorageKey, JSON.stringify(dayModelMap));
+  }, [days, dayModelStorageKey]);
 
   useEffect(() => {
     const loadHours = async () => {
@@ -209,8 +337,31 @@ function App() {
           `/hours?month=${selectedMonth}`,
         );
 
+        const normalizedDays = normalizeDays(response.days);
+        const savedMapRaw = dayModelStorageKey
+          ? localStorage.getItem(dayModelStorageKey)
+          : null;
+        let savedMap: Record<string, string> = {};
+
+        if (savedMapRaw) {
+          try {
+            savedMap = JSON.parse(savedMapRaw) as Record<string, string>;
+          } catch {
+            savedMap = {};
+          }
+        }
+
+        const mergedDays = normalizedDays.map((day) => {
+          const mappedModelId = savedMap[getDayIdentity(day)];
+
+          return {
+            ...day,
+            calculationModelId: day.calculationModelId || mappedModelId || "",
+          };
+        });
+
         setSalary(response.salary);
-        setDays(normalizeDays(response.days));
+        setDays(mergedDays);
         setIsSyncReady(true);
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
@@ -225,7 +376,7 @@ function App() {
     };
 
     loadHours();
-  }, [session, selectedMonth]);
+  }, [session, selectedMonth, dayModelStorageKey]);
 
   useEffect(() => {
     if (!session || !isSyncReady) {
@@ -240,6 +391,7 @@ function App() {
             startTime: day.startTime,
             endTime: day.endTime,
             projectWorked: day.projectWorked,
+            calculationModelId: day.calculationModelId,
           }))
           .filter(isCompleteDay);
 
@@ -278,15 +430,26 @@ function App() {
     );
 
     const valorHora = salary / 160;
-    const valorHora50 = valorHora * 1.5;
-    const valorHora100 = valorHora * 2;
+    const modelMap = new Map(
+      calculationModels.map((model) => [model.id, model]),
+    );
+
+    const totalValue = days.reduce((accumulator, day) => {
+      const workedHours = calculateWorkedHours(day.startTime, day.endTime);
+
+      if (workedHours <= 0) {
+        return accumulator;
+      }
+
+      const multiplier = modelMap.get(day.calculationModelId)?.multiplier ?? 1;
+      return accumulator + workedHours * valorHora * multiplier;
+    }, 0);
 
     return {
       totalHours,
-      total50: totalHours * valorHora50,
-      total100: totalHours * valorHora100,
+      totalValue,
     };
-  }, [days, salary]);
+  }, [days, salary, calculationModels]);
 
   const dayHoursChart = useMemo(() => {
     const dateTotals = new Map<string, number>();
@@ -333,6 +496,43 @@ function App() {
       .map(([label, hours]) => ({ label, hours }));
   }, [days]);
 
+  const projectSummary = useMemo<ProjectSummaryItem[]>(() => {
+    const projectMap = new Map<string, { hours: number; totalValue: number }>();
+    const modelMap = new Map(
+      calculationModels.map((model) => [model.id, model]),
+    );
+    const valorHora = salary / 160;
+
+    days.forEach((day) => {
+      if (!day.startTime || !day.endTime) {
+        return;
+      }
+
+      const workedHours = calculateWorkedHours(day.startTime, day.endTime);
+
+      if (workedHours <= 0) {
+        return;
+      }
+
+      const label = day.projectWorked.trim() || "Sem projeto";
+      const multiplier = modelMap.get(day.calculationModelId)?.multiplier ?? 1;
+      const current = projectMap.get(label) ?? { hours: 0, totalValue: 0 };
+
+      projectMap.set(label, {
+        hours: current.hours + workedHours,
+        totalValue: current.totalValue + workedHours * valorHora * multiplier,
+      });
+    });
+
+    return Array.from(projectMap.entries())
+      .sort((a, b) => b[1].hours - a[1].hours)
+      .map(([label, data]) => ({
+        label,
+        hours: data.hours,
+        totalValue: data.totalValue,
+      }));
+  }, [days, salary, calculationModels]);
+
   const handleDayEdit = (updatedEntry: DayEntry) => {
     setDays((currentDays) =>
       currentDays.map((day) =>
@@ -352,6 +552,61 @@ function App() {
       }
 
       return currentDays.filter((day) => day.id !== id);
+    });
+  };
+
+  const handleAddModel = () => {
+    setCalculationModels((current) => [
+      ...current,
+      {
+        id: generateId(),
+        name: `Modelo ${current.length + 1}`,
+        multiplier: 1.5,
+      },
+    ]);
+  };
+
+  const handleUpdateModel = (
+    id: string,
+    field: "name" | "multiplier",
+    value: string,
+  ) => {
+    setCalculationModels((current) =>
+      current.map((model) => {
+        if (model.id !== id) {
+          return model;
+        }
+
+        if (field === "name") {
+          return { ...model, name: value };
+        }
+
+        return {
+          ...model,
+          multiplier: Number(value) > 0 ? Number(value) : model.multiplier,
+        };
+      }),
+    );
+  };
+
+  const handleRemoveModel = (id: string) => {
+    setCalculationModels((current) => {
+      if (current.length <= 1) {
+        return current;
+      }
+
+      const fallbackModelId =
+        current.find((model) => model.id !== id)?.id ?? "";
+
+      setDays((currentDays) =>
+        currentDays.map((day) =>
+          day.calculationModelId === id
+            ? { ...day, calculationModelId: fallbackModelId }
+            : day,
+        ),
+      );
+
+      return current.filter((model) => model.id !== id);
     });
   };
 
@@ -437,8 +692,8 @@ function App() {
       <header className="header">
         <h1>Controle Mensal de Horas Extras</h1>
         <p>
-          Registre os dias do mês e acompanhe os valores com adicional de 50% e
-          100%.
+          Configure seus modelos de cálculo e registre os dias por projeto para
+          acompanhar os valores do mês.
         </p>
       </header>
 
@@ -460,21 +715,10 @@ function App() {
             <p className="hint">Carregando dados do servidor...</p>
           ) : null}
 
-          <section className="card month-selector">
-            <label className="field">
-              <span>Mês de referência</span>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-              />
-            </label>
-          </section>
-
           <div className="workspace-grid">
             <button
               type="button"
-              className="menu-toggle"
+              className={isSidebarOpen ? "menu-toggle open" : "menu-toggle"}
               onClick={() => setIsSidebarOpen(true)}
             >
               ☰ Menu
@@ -494,6 +738,18 @@ function App() {
                 isSidebarOpen ? "tabs-sidebar card open" : "tabs-sidebar card"
               }
             >
+              <button
+                type="button"
+                className={
+                  activeTab === "config" ? "tab-button active" : "tab-button"
+                }
+                onClick={() => {
+                  setActiveTab("config");
+                  setIsSidebarOpen(false);
+                }}
+              >
+                Configuração
+              </button>
               <button
                 type="button"
                 className={
@@ -521,26 +777,82 @@ function App() {
             </aside>
 
             <section className="tab-content">
+              {activeTab === "config" ? (
+                <CalculationSettings
+                  salary={salary}
+                  onSalaryChange={setSalary}
+                  models={calculationModels}
+                  onAddModel={handleAddModel}
+                  onUpdateModel={handleUpdateModel}
+                  onRemoveModel={handleRemoveModel}
+                />
+              ) : null}
+
               {activeTab === "days" ? (
-                <>
-                  <div className="top-row">
-                    <SalaryInput salary={salary} onSalaryChange={setSalary} />
+                <div className="days-layout">
+                  <div className="days-overview-grid">
+                    <section className="card month-selector">
+                      <label className="field">
+                        <span>Mês de referência</span>
+                        <input
+                          type="month"
+                          value={selectedMonth}
+                          onChange={(event) =>
+                            setSelectedMonth(event.target.value)
+                          }
+                        />
+                      </label>
+                    </section>
+
                     <Summary totals={totals} />
+
+                    <section className="card inline-project-summary">
+                      <h2>Resumo por Projeto</h2>
+
+                      {projectSummary.length === 0 ? (
+                        <p className="hint">
+                          Adicione dias completos para ver os cálculos separados
+                          por freela.
+                        </p>
+                      ) : (
+                        <div className="inline-project-summary-list">
+                          {projectSummary.map((item) => (
+                            <article
+                              key={item.label}
+                              className="inline-project-summary-item"
+                            >
+                              <p>
+                                <strong>{item.label}</strong>
+                                <span>{item.hours.toFixed(2)} h</span>
+                              </p>
+                              <p>
+                                <span>Total calculado</span>
+                                <strong>
+                                  {formatCurrency(item.totalValue)}
+                                </strong>
+                              </p>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
                   </div>
 
                   <DaysList
                     days={days}
+                    calculationModels={calculationModels}
                     onEditDay={handleDayEdit}
                     onRemoveDay={handleRemoveDay}
                     onAddDay={handleAddDay}
                   />
-                </>
+                </div>
               ) : null}
 
               {activeTab === "stats" ? (
                 <StatisticsPanel
                   dayHours={dayHoursChart}
                   projectHours={projectHoursChart}
+                  projectSummary={projectSummary}
                 />
               ) : null}
             </section>

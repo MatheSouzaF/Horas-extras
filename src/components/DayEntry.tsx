@@ -2,25 +2,39 @@ import type { DayEntry as DayEntryType } from "../types";
 
 type DayEntryProps = {
   entry: DayEntryType;
+  calculationModelName: string;
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
 };
 
-export function DayEntry({ entry, onEdit, onRemove }: DayEntryProps) {
+export function DayEntry({
+  entry,
+  calculationModelName,
+  onEdit,
+  onRemove,
+}: DayEntryProps) {
   return (
     <article className="day-entry">
-      <div className="day-entry-content">
-        <p>
-          <strong>Data:</strong> {entry.date || "-"}
+      <div className="day-entry-content day-entry-meta-grid">
+        <p className="day-meta-item">
+          <span>Data</span>
+          <strong>{entry.date || "-"}</strong>
         </p>
-        <p>
-          <strong>Entrada:</strong> {entry.startTime || "-"}
+        <p className="day-meta-item">
+          <span>Entrada</span>
+          <strong>{entry.startTime || "-"}</strong>
         </p>
-        <p>
-          <strong>Saída:</strong> {entry.endTime || "-"}
+        <p className="day-meta-item">
+          <span>Saída</span>
+          <strong>{entry.endTime || "-"}</strong>
         </p>
-        <p>
-          <strong>Projeto:</strong> {entry.projectWorked || "-"}
+        <p className="day-meta-item day-meta-project">
+          <span>Projeto</span>
+          <strong>{entry.projectWorked || "-"}</strong>
+        </p>
+        <p className="day-meta-item">
+          <span>Modelo</span>
+          <strong>{calculationModelName}</strong>
         </p>
       </div>
 

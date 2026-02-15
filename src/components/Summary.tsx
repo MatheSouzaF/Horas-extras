@@ -18,12 +18,8 @@ export function Summary({ totals }: SummaryProps) {
           <strong>Total de horas:</strong> {totals.totalHours.toFixed(2)} h
         </p>
         <p>
-          <strong>Total com 50%:</strong>{" "}
-          {currencyFormatter.format(totals.total50)}
-        </p>
-        <p>
-          <strong>Total com 100%:</strong>{" "}
-          {currencyFormatter.format(totals.total100)}
+          <strong>Total calculado:</strong>{" "}
+          {currencyFormatter.format(totals.totalValue)}
         </p>
       </div>
     </section>

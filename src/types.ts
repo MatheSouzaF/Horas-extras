@@ -6,12 +6,18 @@ export type DayEntry = {
   startTime: string;
   endTime: string;
   projectWorked: string;
+  calculationModelId: string;
 };
 
 export type Totals = {
   totalHours: number;
-  total50: number;
-  total100: number;
+  totalValue: number;
+};
+
+export type CalculationModel = {
+  id: string;
+  name: string;
+  multiplier: number;
 };
 
 export type AuthUser = {

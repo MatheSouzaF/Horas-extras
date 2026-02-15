@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { DayEntry } from "./DayEntry";
-import type { DayEntry as DayEntryType } from "../types";
+import type { CalculationModel, DayEntry as DayEntryType } from "../types";
 
 type DaysListProps = {
   days: DayEntryType[];
+  calculationModels: CalculationModel[];
   onEditDay: (entry: DayEntryType) => void;
   onRemoveDay: (id: string) => void;
   onAddDay: (entry: Omit<DayEntryType, "id">) => void;
@@ -16,10 +17,12 @@ const createEmptyForm = (): DayFormState => ({
   startTime: "",
   endTime: "",
   projectWorked: "",
+  calculationModelId: "",
 });
 
 export function DaysList({
   days,
+  calculationModels,
   onEditDay,
   onRemoveDay,
   onAddDay,
@@ -35,7 +38,10 @@ export function DaysList({
 
   const openCreateModal = () => {
     setEditingId(null);
-    setFormState(createEmptyForm());
+    setFormState({
+      ...createEmptyForm(),
+      calculationModelId: calculationModels[0]?.id ?? "",
+    });
     setIsModalOpen(true);
   };
 
@@ -52,6 +58,8 @@ export function DaysList({
       startTime: entry.startTime,
       endTime: entry.endTime,
       projectWorked: entry.projectWorked,
+      calculationModelId:
+        entry.calculationModelId || calculationModels[0]?.id || "",
     });
     setIsModalOpen(true);
   };
@@ -66,7 +74,8 @@ export function DaysList({
       !formState.date ||
       !formState.startTime ||
       !formState.endTime ||
-      !formState.projectWorked.trim()
+      !formState.projectWorked.trim() ||
+      !formState.calculationModelId
     ) {
       return;
     }
@@ -101,6 +110,11 @@ export function DaysList({
           <DayEntry
             key={entry.id}
             entry={entry}
+            calculationModelName={
+              calculationModels.find(
+                (model) => model.id === entry.calculationModelId,
+              )?.name ?? "-"
+            }
             onEdit={openEditModal}
             onRemove={onRemoveDay}
           />
@@ -167,6 +181,25 @@ export function DaysList({
                 }
                 placeholder="Ex.: Fechamento mensal"
               />
+            </label>
+
+            <label className="field">
+              <span>Modelo de cálculo</span>
+              <select
+                value={formState.calculationModelId}
+                onChange={(event) =>
+                  setFormState((current) => ({
+                    ...current,
+                    calculationModelId: event.target.value,
+                  }))
+                }
+              >
+                {calculationModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} ({model.multiplier.toFixed(2)}x)
+                  </option>
+                ))}
+              </select>
             </label>
 
             <div className="modal-actions">
