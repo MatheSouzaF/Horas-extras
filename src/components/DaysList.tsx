@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DayEntry } from "./DayEntry";
 import type { CalculationModel, DayEntry as DayEntryType } from "../types";
 
@@ -36,6 +36,22 @@ export function DaysList({
     [days, editingId],
   );
 
+  useEffect(() => {
+    if (!isModalOpen || calculationModels.length === 0) {
+      return;
+    }
+
+    const validModelIds = new Set(calculationModels.map((model) => model.id));
+    const fallbackModelId = calculationModels[0].id;
+
+    setFormState((current) =>
+      current.calculationModelId &&
+      validModelIds.has(current.calculationModelId)
+        ? current
+        : { ...current, calculationModelId: fallbackModelId },
+    );
+  }, [calculationModels, isModalOpen]);
+
   const openCreateModal = () => {
     setEditingId(null);
     setFormState({
@@ -70,12 +86,20 @@ export function DaysList({
   };
 
   const handleSave = () => {
+    const validModelIds = new Set(calculationModels.map((model) => model.id));
+    const fallbackModelId = calculationModels[0]?.id ?? "";
+    const resolvedModelId =
+      formState.calculationModelId &&
+      validModelIds.has(formState.calculationModelId)
+        ? formState.calculationModelId
+        : fallbackModelId;
+
     if (
       !formState.date ||
       !formState.startTime ||
       !formState.endTime ||
       !formState.projectWorked.trim() ||
-      !formState.calculationModelId
+      !resolvedModelId
     ) {
       return;
     }
@@ -84,11 +108,13 @@ export function DaysList({
       onEditDay({
         ...editingEntry,
         ...formState,
+        calculationModelId: resolvedModelId,
         projectWorked: formState.projectWorked.trim(),
       });
     } else {
       onAddDay({
         ...formState,
+        calculationModelId: resolvedModelId,
         projectWorked: formState.projectWorked.trim(),
       });
     }

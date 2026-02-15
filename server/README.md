@@ -33,7 +33,8 @@ API Node.js + TypeScript com autenticação JWT (access + refresh) e persistênc
         {
           "date": "2026-02-14",
           "startTime": "08:00",
-          "endTime": "18:00"
+          "endTime": "18:00",
+          "calculationModelId": "modelo-normal"
         }
       ]
     }

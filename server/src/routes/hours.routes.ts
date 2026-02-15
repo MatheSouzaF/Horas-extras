@@ -16,6 +16,7 @@ const saveHoursSchema = z.object({
       startTime: z.string().regex(/^\d{2}:\d{2}$/),
       endTime: z.string().regex(/^\d{2}:\d{2}$/),
       projectWorked: z.string().trim().default(""),
+      calculationModelId: z.string().trim().default(""),
     }),
   ),
 });
@@ -83,6 +84,7 @@ hoursRoutes.get("/", ensureAuth, async (request: AuthRequest, response) => {
       startTime: entry.startTime,
       endTime: entry.endTime,
       projectWorked: entry.projectWorked,
+      calculationModelId: entry.calculationModelId,
     })),
   });
 });
@@ -143,6 +145,7 @@ hoursRoutes.put("/", ensureAuth, async (request: AuthRequest, response) => {
           startTime: entry.startTime,
           endTime: entry.endTime,
           projectWorked: entry.projectWorked,
+          calculationModelId: entry.calculationModelId,
           workedHours: calculateWorkedHours(entry.startTime, entry.endTime),
         })),
       });

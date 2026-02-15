@@ -15,3 +15,10 @@ const adapter = new PrismaPg(pool);
 export const prisma = new PrismaClient({
   adapter,
 });
+
+export const ensureHoursSchema = async () => {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "DayEntry"
+    ADD COLUMN IF NOT EXISTS "calculationModelId" TEXT NOT NULL DEFAULT '';
+  `);
+};

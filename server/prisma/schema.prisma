@@ -43,6 +43,7 @@ model DayEntry {
   startTime       String
   endTime         String
   projectWorked   String       @default("")
+  calculationModelId String    @default("")
   workedHours     Float        @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt

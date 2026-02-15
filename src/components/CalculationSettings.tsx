@@ -1,4 +1,3 @@
-import { generateId } from "../utils/uuid";
 import type { CalculationModel, Salary } from "../types";
 
 type CalculationSettingsProps = {
@@ -92,6 +91,6 @@ export function CalculationSettings({
 }
 
 export const createDefaultModels = (): CalculationModel[] => [
-  { id: generateId(), name: "Hora Extra 50%", multiplier: 1.5 },
-  { id: generateId(), name: "Hora Extra 100%", multiplier: 2 },
+  { id: "default-50", name: "Hora Extra 50%", multiplier: 1.5 },
+  { id: "default-100", name: "Hora Extra 100%", multiplier: 2 },
 ];

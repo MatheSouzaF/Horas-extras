@@ -29,7 +29,7 @@
 
 .menu-toggle {
   position: fixed;
-  top: 1.25rem;
+  bottom: 1.25rem;
   left: 1rem;
   z-index: 21;
   width: fit-content;

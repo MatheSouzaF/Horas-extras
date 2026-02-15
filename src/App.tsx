@@ -144,8 +144,10 @@ const normalizeDays = (days: HoursResponse["days"]): DayEntry[] => {
   }));
 };
 
-const isCompleteDay = (day: Pick<DayEntry, "date" | "startTime" | "endTime">) =>
-  Boolean(day.date && day.startTime && day.endTime);
+const isSyncableDay = (
+  day: Pick<DayEntry, "date" | "startTime" | "endTime" | "calculationModelId">,
+) =>
+  Boolean(day.date && day.startTime && day.endTime && day.calculationModelId);
 
 const loadSession = (): AuthSession | null => {
   const saved = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -294,9 +296,11 @@ function App() {
       return;
     }
 
+    const validModelIds = new Set(calculationModels.map((model) => model.id));
+
     setDays((currentDays) =>
       currentDays.map((day) =>
-        day.calculationModelId
+        day.calculationModelId && validModelIds.has(day.calculationModelId)
           ? day
           : { ...day, calculationModelId: fallbackModelId },
       ),
@@ -353,10 +357,12 @@ function App() {
 
         const mergedDays = normalizedDays.map((day) => {
           const mappedModelId = savedMap[getDayIdentity(day)];
+          const fallbackModelId = calculationModels[0]?.id ?? "";
 
           return {
             ...day,
-            calculationModelId: day.calculationModelId || mappedModelId || "",
+            calculationModelId:
+              day.calculationModelId || mappedModelId || fallbackModelId,
           };
         });
 
@@ -391,9 +397,10 @@ function App() {
             startTime: day.startTime,
             endTime: day.endTime,
             projectWorked: day.projectWorked,
-            calculationModelId: day.calculationModelId,
+            calculationModelId:
+              day.calculationModelId || calculationModels[0]?.id || "",
           }))
-          .filter(isCompleteDay);
+          .filter(isSyncableDay);
 
         await requestWithRefresh<{ message: string }>(
           `/hours?month=${selectedMonth}`,
@@ -420,7 +427,7 @@ function App() {
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [salary, days, session, selectedMonth, isSyncReady]);
+  }, [salary, days, session, selectedMonth, isSyncReady, calculationModels]);
 
   const totals = useMemo<Totals>(() => {
     const totalHours = days.reduce(
