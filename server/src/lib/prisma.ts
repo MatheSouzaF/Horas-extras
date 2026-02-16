@@ -21,4 +21,9 @@ export const ensureHoursSchema = async () => {
     ALTER TABLE "DayEntry"
     ADD COLUMN IF NOT EXISTS "calculationModelId" TEXT NOT NULL DEFAULT '';
   `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "MonthlyRecord"
+    ADD COLUMN IF NOT EXISTS "modelsJson" TEXT NOT NULL DEFAULT '[]';
+  `);
 };

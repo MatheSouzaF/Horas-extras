@@ -27,8 +27,6 @@ import "./App.css";
 
 const SESSION_STORAGE_KEY = "controle-mensal-horas-extras:session";
 const MONTH_STORAGE_KEY = "controle-mensal-horas-extras:selected-month";
-const MODELS_STORAGE_KEY = "controle-mensal-horas-extras:models";
-const DAY_MODEL_STORAGE_KEY = "controle-mensal-horas-extras:day-model-map";
 
 type StoredState = {
   salary: Salary;
@@ -50,6 +48,7 @@ type LoginResponse = {
 type HoursResponse = {
   salary: Salary;
   month: string;
+  calculationModels?: CalculationModel[];
   days: Array<{
     id?: string;
     date: string;
@@ -105,10 +104,6 @@ const formatUserName = (name: string): string =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
-
-const getDayIdentity = (
-  day: Pick<DayEntry, "date" | "startTime" | "endTime" | "projectWorked">,
-) => `${day.date}|${day.startTime}|${day.endTime}|${day.projectWorked.trim()}`;
 
 const createEmptyDay = (): DayEntry => ({
   id: generateId(),
@@ -265,6 +260,26 @@ const normalizeDays = (days: HoursResponse["days"]): DayEntry[] => {
   }));
 };
 
+const normalizeCalculationModels = (
+  models: HoursResponse["calculationModels"],
+): CalculationModel[] => {
+  if (!models?.length) {
+    return createDefaultModels();
+  }
+
+  const normalized = models
+    .filter((model) => model.id && model.name.trim())
+    .map((model) => ({
+      ...model,
+      name: model.name.trim(),
+      multiplier: Number(model.multiplier) > 0 ? Number(model.multiplier) : 1,
+    }));
+
+  return normalized.length > 0
+    ? ensureStandardModel(normalized)
+    : createDefaultModels();
+};
+
 const isSyncableDay = (
   day: Pick<DayEntry, "date" | "startTime" | "endTime" | "calculationModelId">,
 ) =>
@@ -322,22 +337,6 @@ function App() {
     CalculationModel[]
   >(() => createDefaultModels());
 
-  const modelStorageKey = useMemo(() => {
-    if (!session) {
-      return "";
-    }
-
-    return `${MODELS_STORAGE_KEY}:${session.user.id}:${selectedMonth}`;
-  }, [selectedMonth, session]);
-
-  const dayModelStorageKey = useMemo(() => {
-    if (!session) {
-      return "";
-    }
-
-    return `${DAY_MODEL_STORAGE_KEY}:${session.user.id}:${selectedMonth}`;
-  }, [selectedMonth, session]);
-
   const requestWithRefresh = async <T,>(
     path: string,
     options: { method?: "GET" | "POST" | "PUT"; body?: unknown } = {},
@@ -392,47 +391,6 @@ function App() {
   }, [selectedMonth]);
 
   useEffect(() => {
-    if (!modelStorageKey) {
-      return;
-    }
-
-    const saved = localStorage.getItem(modelStorageKey);
-
-    if (!saved) {
-      setCalculationModels(createDefaultModels());
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as CalculationModel[];
-      const normalized = parsed
-        .filter((model) => model.id && model.name.trim())
-        .map((model) => ({
-          ...model,
-          name: model.name.trim(),
-          multiplier:
-            Number(model.multiplier) > 0 ? Number(model.multiplier) : 1,
-        }));
-
-      setCalculationModels(
-        normalized.length > 0
-          ? ensureStandardModel(normalized)
-          : createDefaultModels(),
-      );
-    } catch {
-      setCalculationModels(createDefaultModels());
-    }
-  }, [modelStorageKey]);
-
-  useEffect(() => {
-    if (!modelStorageKey) {
-      return;
-    }
-
-    localStorage.setItem(modelStorageKey, JSON.stringify(calculationModels));
-  }, [calculationModels, modelStorageKey]);
-
-  useEffect(() => {
     const fallbackModelId = calculationModels[0]?.id;
 
     if (!fallbackModelId) {
@@ -451,28 +409,6 @@ function App() {
   }, [calculationModels]);
 
   useEffect(() => {
-    if (!dayModelStorageKey) {
-      return;
-    }
-
-    const dayModelMap = days.reduce<Record<string, string>>((acc, day) => {
-      if (
-        !day.date ||
-        !day.startTime ||
-        !day.endTime ||
-        !day.calculationModelId
-      ) {
-        return acc;
-      }
-
-      acc[getDayIdentity(day)] = day.calculationModelId;
-      return acc;
-    }, {});
-
-    localStorage.setItem(dayModelStorageKey, JSON.stringify(dayModelMap));
-  }, [days, dayModelStorageKey]);
-
-  useEffect(() => {
     const loadHours = async () => {
       if (!session) {
         return;
@@ -485,30 +421,20 @@ function App() {
         );
 
         const normalizedDays = normalizeDays(response.days);
-        const savedMapRaw = dayModelStorageKey
-          ? localStorage.getItem(dayModelStorageKey)
-          : null;
-        let savedMap: Record<string, string> = {};
-
-        if (savedMapRaw) {
-          try {
-            savedMap = JSON.parse(savedMapRaw) as Record<string, string>;
-          } catch {
-            savedMap = {};
-          }
-        }
+        const normalizedModels = normalizeCalculationModels(
+          response.calculationModels,
+        );
 
         const mergedDays = normalizedDays.map((day) => {
-          const mappedModelId = savedMap[getDayIdentity(day)];
-          const fallbackModelId = calculationModels[0]?.id ?? "";
+          const fallbackModelId = normalizedModels[0]?.id ?? "";
 
           return {
             ...day,
-            calculationModelId:
-              day.calculationModelId || mappedModelId || fallbackModelId,
+            calculationModelId: day.calculationModelId || fallbackModelId,
           };
         });
 
+        setCalculationModels(normalizedModels);
         setSalary(response.salary);
         setDays(mergedDays);
         setIsSyncReady(true);
@@ -525,7 +451,7 @@ function App() {
     };
 
     loadHours();
-  }, [session, selectedMonth, dayModelStorageKey]);
+  }, [session, selectedMonth]);
 
   useEffect(() => {
     if (!session || !isSyncReady) {
@@ -551,6 +477,7 @@ function App() {
             method: "PUT",
             body: {
               salary,
+              calculationModels,
               days: completeDays,
             },
           },

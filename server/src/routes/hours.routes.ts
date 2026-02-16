@@ -10,6 +10,15 @@ const monthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 
 const saveHoursSchema = z.object({
   salary: z.number().min(0),
+  calculationModels: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+        multiplier: z.number().positive(),
+      }),
+    )
+    .default([]),
   days: z.array(
     z.object({
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -44,6 +53,41 @@ const calculateWorkedHours = (startTime: string, endTime: string): number => {
   return (resolvedEnd - start) / 60;
 };
 
+type StoredCalculationModel = {
+  id: string;
+  name: string;
+  multiplier: number;
+};
+
+const parseStoredCalculationModels = (
+  raw: string | null | undefined,
+): StoredCalculationModel[] => {
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const validated = z
+      .array(
+        z.object({
+          id: z.string().trim().min(1),
+          name: z.string().trim().min(1),
+          multiplier: z.number().positive(),
+        }),
+      )
+      .safeParse(parsed);
+
+    if (!validated.success) {
+      return [];
+    }
+
+    return validated.data;
+  } catch {
+    return [];
+  }
+};
+
 hoursRoutes.get("/", ensureAuth, async (request: AuthRequest, response) => {
   const userId = request.user?.sub;
 
@@ -74,8 +118,21 @@ hoursRoutes.get("/", ensureAuth, async (request: AuthRequest, response) => {
   });
 
   if (!record) {
-    return response.status(200).json({ salary: 0, month, days: [] });
+    return response
+      .status(200)
+      .json({ salary: 0, month, days: [], calculationModels: [] });
   }
+
+  const modelRows = await prisma.$queryRaw<
+    Array<{ modelsJson: string | null }>
+  >`
+    SELECT "modelsJson"
+    FROM "MonthlyRecord"
+    WHERE "id" = ${record.id}
+    LIMIT 1
+  `;
+
+  const storedModels = parseStoredCalculationModels(modelRows[0]?.modelsJson);
 
   return response.status(200).json({
     salary: record.salary,
@@ -88,6 +145,7 @@ hoursRoutes.get("/", ensureAuth, async (request: AuthRequest, response) => {
       projectWorked: entry.projectWorked,
       calculationModelId: entry.calculationModelId,
     })),
+    calculationModels: storedModels,
   });
 });
 
@@ -113,7 +171,7 @@ hoursRoutes.put("/", ensureAuth, async (request: AuthRequest, response) => {
     return response.status(400).json({ message: parsed.error.flatten() });
   }
 
-  const { salary, days } = parsed.data;
+  const { salary, days, calculationModels } = parsed.data;
 
   const monthlyRecord = await prisma.monthlyRecord.upsert({
     where: {
@@ -133,6 +191,12 @@ hoursRoutes.put("/", ensureAuth, async (request: AuthRequest, response) => {
   });
 
   await prisma.$transaction(async (transaction) => {
+    await transaction.$executeRaw`
+      UPDATE "MonthlyRecord"
+      SET "modelsJson" = ${JSON.stringify(calculationModels)}
+      WHERE "id" = ${monthlyRecord.id}
+    `;
+
     await transaction.dayEntry.deleteMany({
       where: {
         monthlyRecordId: monthlyRecord.id,
