@@ -42,6 +42,43 @@ app.post("/deploy", (request, response) => {
   });
 });
 
+app.get("/", (_request, response) => {
+  return response.status(200).json({ online: true, app: "wmeter" });
+});
+
+<<<<<<< HEAD
+app.post("/deploy", (request, response) => {
+  const githubEvent = request.header("X-GitHub-Event");
+
+  if (githubEvent !== "push") {
+    return response.status(202).json({
+      accepted: false,
+      reason: "Evento ignorado",
+      event: githubEvent ?? "unknown",
+    });
+  }
+
+  const body = request.body as { ref?: string; after?: string };
+  const ref = body?.ref;
+
+  if (ref !== "refs/heads/main") {
+    return response.status(202).json({
+      accepted: false,
+      reason: "Branch ignorada",
+      ref: ref ?? "unknown",
+    });
+  }
+
+  return response.status(200).json({
+    accepted: true,
+    event: "push",
+    ref,
+    commit: body?.after ?? "unknown",
+  });
+});
+
+=======
+>>>>>>> 392600a14ff101b516ec01ba99fe4a3e33d3a9d2
 app.get("/health", (_request, response) => {
   return response.status(200).json({ status: "ok" });
 });
