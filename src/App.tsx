@@ -12,6 +12,8 @@ import {
 import { DaysList } from "./components/DaysList";
 import { Summary } from "./components/Summary";
 import { StatisticsPanel } from "./components/StatisticsPanel";
+import { AnnualSummary } from "./components/AnnualSummary";
+import type { AnnualMonth } from "./components/AnnualSummary";
 import { UserSession } from "./components/UserSession";
 import { ApiError, apiRequest, refreshSession } from "./services/api";
 import type {
@@ -59,7 +61,7 @@ type HoursResponse = {
   }>;
 };
 
-type AppTab = "config" | "days" | "stats";
+type AppTab = "config" | "days" | "stats" | "annual";
 
 type ProjectSummaryItem = {
   label: string;
@@ -214,13 +216,17 @@ const getDayValue = (
   }
 
   const model = modelMap.get(day.calculationModelId);
+  const effectiveHourlyValue =
+    model?.hourlyRate != null && model.hourlyRate > 0
+      ? model.hourlyRate
+      : hourlyValue;
 
   if (model?.id === STANDARD_MODEL_ID) {
-    return calculateStandardModelValue(day, hourlyValue, model.multiplier);
+    return calculateStandardModelValue(day, effectiveHourlyValue, model.multiplier);
   }
 
   const multiplier = model?.multiplier ?? 1;
-  return workedHours * hourlyValue * multiplier;
+  return workedHours * effectiveHourlyValue * multiplier;
 };
 
 const loadInitialState = (): StoredState => {
@@ -273,6 +279,10 @@ const normalizeCalculationModels = (
       ...model,
       name: model.name.trim(),
       multiplier: Number(model.multiplier) > 0 ? Number(model.multiplier) : 1,
+      hourlyRate:
+        model.hourlyRate != null && Number(model.hourlyRate) > 0
+          ? Number(model.hourlyRate)
+          : undefined,
     }));
 
   return normalized.length > 0
@@ -336,6 +346,12 @@ function App() {
   const [calculationModels, setCalculationModels] = useState<
     CalculationModel[]
   >(() => createDefaultModels());
+
+  const [annualYear, setAnnualYear] = useState<string>(() =>
+    String(new Date().getFullYear()),
+  );
+  const [annualMonths, setAnnualMonths] = useState<AnnualMonth[]>([]);
+  const [isLoadingAnnual, setIsLoadingAnnual] = useState(false);
 
   const requestWithRefresh = async <T,>(
     path: string,
@@ -452,6 +468,35 @@ function App() {
 
     loadHours();
   }, [session, selectedMonth]);
+
+  useEffect(() => {
+    const loadAnnual = async () => {
+      if (!session || activeTab !== "annual") {
+        return;
+      }
+
+      try {
+        setIsLoadingAnnual(true);
+        const response = await requestWithRefresh<{
+          year: string;
+          months: AnnualMonth[];
+        }>(`/hours/annual?year=${annualYear}`);
+
+        setAnnualMonths(response.months);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          setSession(null);
+          setAuthError("Sessão expirada. Faça login novamente.");
+          return;
+        }
+        setAnnualMonths([]);
+      } finally {
+        setIsLoadingAnnual(false);
+      }
+    };
+
+    loadAnnual();
+  }, [session, annualYear, activeTab]);
 
   useEffect(() => {
     if (!session || !isSyncReady) {
@@ -636,6 +681,15 @@ function App() {
     }, {});
   }, [days, salary, calculationModels]);
 
+  const projectNames = useMemo<string[]>(() => {
+    const names = new Set<string>();
+    days.forEach((day) => {
+      const name = day.projectWorked.trim();
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [days]);
+
   const handleDayEdit = (updatedEntry: DayEntry) => {
     setDays((currentDays) =>
       currentDays.map((day) =>
@@ -671,7 +725,7 @@ function App() {
 
   const handleUpdateModel = (
     id: string,
-    field: "name" | "multiplier",
+    field: "name" | "multiplier" | "hourlyRate",
     value: string,
   ) => {
     setCalculationModels((current) =>
@@ -690,6 +744,14 @@ function App() {
 
         if (field === "name") {
           return { ...model, name: value };
+        }
+
+        if (field === "hourlyRate") {
+          const parsed = Number(value);
+          return {
+            ...model,
+            hourlyRate: value === "" || parsed <= 0 ? undefined : parsed,
+          };
         }
 
         return {
@@ -975,6 +1037,18 @@ function App() {
               >
                 Configuração
               </button>
+              <button
+                type="button"
+                className={
+                  activeTab === "annual" ? "tab-button active" : "tab-button"
+                }
+                onClick={() => {
+                  setActiveTab("annual");
+                  setIsSidebarOpen(false);
+                }}
+              >
+                Resumo Anual
+              </button>
             </aside>
 
             <section className="tab-content">
@@ -1056,6 +1130,7 @@ function App() {
                     days={days}
                     calculationModels={calculationModels}
                     dayValuesById={dayValuesById}
+                    projectNames={projectNames}
                     onEditDay={handleDayEdit}
                     onRemoveDay={handleRemoveDay}
                     onAddDay={handleAddDay}
@@ -1070,6 +1145,15 @@ function App() {
                   projectSummary={projectSummary}
                   averageDailyHours={averageDailyHours}
                   workedDaysCount={dayHoursChart.length}
+                />
+              ) : null}
+
+              {activeTab === "annual" ? (
+                <AnnualSummary
+                  year={annualYear}
+                  months={annualMonths}
+                  isLoading={isLoadingAnnual}
+                  onYearChange={setAnnualYear}
                 />
               ) : null}
             </section>

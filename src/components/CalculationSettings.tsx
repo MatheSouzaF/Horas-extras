@@ -11,7 +11,7 @@ type CalculationSettingsProps = {
   onAddModel: () => void;
   onUpdateModel: (
     id: string,
-    field: "name" | "multiplier",
+    field: "name" | "multiplier" | "hourlyRate",
     value: string,
   ) => void;
   onRemoveModel: (id: string) => void;
@@ -82,14 +82,30 @@ export function CalculationSettings({
             </label>
 
             {model.id !== STANDARD_MODEL_ID ? (
-              <button
-                type="button"
-                className="remove-button"
-                onClick={() => onRemoveModel(model.id)}
-                disabled={models.length <= 1}
-              >
-                Remover
-              </button>
+              <>
+                <label className="field">
+                  <span>Valor da hora (R$)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={model.hourlyRate ?? ""}
+                    onChange={(event) =>
+                      onUpdateModel(model.id, "hourlyRate", event.target.value)
+                    }
+                    placeholder="Deixe vazio para usar salário ÷ 160"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="remove-button"
+                  onClick={() => onRemoveModel(model.id)}
+                  disabled={models.length <= 1}
+                >
+                  Remover
+                </button>
+              </>
             ) : null}
           </article>
         ))}

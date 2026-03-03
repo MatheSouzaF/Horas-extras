@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DayEntry } from "./DayEntry";
 import type { CalculationModel, DayEntry as DayEntryType } from "../types";
 import { STANDARD_MODEL_ID } from "./CalculationSettings";
@@ -7,6 +7,7 @@ type DaysListProps = {
   days: DayEntryType[];
   calculationModels: CalculationModel[];
   dayValuesById: Record<string, number>;
+  projectNames: string[];
   onEditDay: (entry: DayEntryType) => void;
   onRemoveDay: (id: string) => void;
   onAddDay: (entry: Omit<DayEntryType, "id">) => void;
@@ -26,6 +27,7 @@ export function DaysList({
   days,
   calculationModels,
   dayValuesById,
+  projectNames,
   onEditDay,
   onRemoveDay,
   onAddDay,
@@ -33,11 +35,24 @@ export function DaysList({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formState, setFormState] = useState<DayFormState>(createEmptyForm());
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const projectInputRef = useRef<HTMLInputElement>(null);
+  const blurTimeoutRef = useRef<number | null>(null);
 
   const editingEntry = useMemo(
     () => days.find((entry) => entry.id === editingId) ?? null,
     [days, editingId],
   );
+
+  const filteredSuggestions = useMemo(() => {
+    const query = formState.projectWorked.trim().toLowerCase();
+    if (!query) {
+      return projectNames;
+    }
+    return projectNames.filter((name) =>
+      name.toLowerCase().includes(query),
+    );
+  }, [projectNames, formState.projectWorked]);
 
   useEffect(() => {
     if (!isModalOpen || calculationModels.length === 0) {
@@ -55,12 +70,22 @@ export function DaysList({
     );
   }, [calculationModels, isModalOpen]);
 
+  // Clean up blur timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current !== null) {
+        window.clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const openCreateModal = () => {
     setEditingId(null);
     setFormState({
       ...createEmptyForm(),
       calculationModelId: calculationModels[0]?.id ?? "",
     });
+    setShowSuggestions(false);
     setIsModalOpen(true);
   };
 
@@ -80,12 +105,14 @@ export function DaysList({
       calculationModelId:
         entry.calculationModelId || calculationModels[0]?.id || "",
     });
+    setShowSuggestions(false);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
+    setShowSuggestions(false);
   };
 
   const handleSave = () => {
@@ -123,6 +150,27 @@ export function DaysList({
     }
 
     closeModal();
+  };
+
+  const handleSelectSuggestion = (name: string) => {
+    setFormState((current) => ({ ...current, projectWorked: name }));
+    setShowSuggestions(false);
+    projectInputRef.current?.focus();
+  };
+
+  const handleProjectInputBlur = () => {
+    blurTimeoutRef.current = window.setTimeout(() => {
+      setShowSuggestions(false);
+    }, 150);
+  };
+
+  const handleProjectInputFocus = () => {
+    if (blurTimeoutRef.current !== null) {
+      window.clearTimeout(blurTimeoutRef.current);
+    }
+    if (filteredSuggestions.length > 0) {
+      setShowSuggestions(true);
+    }
   };
 
   return (
@@ -198,20 +246,46 @@ export function DaysList({
               />
             </label>
 
-            <label className="field">
+            <div className="field project-autocomplete-field">
               <span>Projeto trabalhado</span>
-              <input
-                type="text"
-                value={formState.projectWorked}
-                onChange={(event) =>
-                  setFormState((current) => ({
-                    ...current,
-                    projectWorked: event.target.value,
-                  }))
-                }
-                placeholder="Ex.: Fechamento mensal"
-              />
-            </label>
+              <div className="project-autocomplete-wrapper">
+                <input
+                  ref={projectInputRef}
+                  type="text"
+                  value={formState.projectWorked}
+                  onChange={(event) => {
+                    setFormState((current) => ({
+                      ...current,
+                      projectWorked: event.target.value,
+                    }));
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={handleProjectInputFocus}
+                  onBlur={handleProjectInputBlur}
+                  placeholder="Ex.: Fechamento mensal"
+                  autoComplete="off"
+                />
+                {showSuggestions && filteredSuggestions.length > 0 ? (
+                  <ul className="project-suggestions" role="listbox">
+                    {filteredSuggestions.map((name) => (
+                      <li
+                        key={name}
+                        role="option"
+                        aria-selected={formState.projectWorked === name}
+                        className={
+                          formState.projectWorked === name
+                            ? "project-suggestion-item active"
+                            : "project-suggestion-item"
+                        }
+                        onMouseDown={() => handleSelectSuggestion(name)}
+                      >
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
 
             <label className="field">
               <span>Modelo de cálculo</span>

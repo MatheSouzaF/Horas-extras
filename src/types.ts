@@ -18,6 +18,7 @@ export type CalculationModel = {
   id: string;
   name: string;
   multiplier: number;
+  hourlyRate?: number;
 };
 
 export type AuthUser = {

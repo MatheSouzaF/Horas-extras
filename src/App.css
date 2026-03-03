@@ -264,79 +264,151 @@ button:hover {
 
 .days-grid {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .day-entry {
   display: grid;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 0.75rem;
-  gap: 0.75rem;
-  align-items: start;
-}
-
-.day-entry-content {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.day-entry-content p {
-  margin: 0;
-}
-
-.day-entry-meta-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
-}
-
-.day-meta-item {
-  margin: 0;
-  padding: 0.45rem 0.55rem;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
-  display: grid;
-  gap: 0.14rem;
+  border-radius: 12px;
+  padding: 0.85rem 0.9rem;
+  background: #ffffff;
+  transition: box-shadow 0.15s ease;
 }
 
-.day-meta-item span {
-  font-size: 0.78rem;
-  color: #6b7280;
+.day-entry:hover {
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
 }
 
-.day-meta-item strong {
-  line-height: 1.2;
-}
-
-.day-meta-project {
-  grid-column: 1 / -1;
-}
-
-.day-entry-footer {
+.day-entry-top {
   display: flex;
-  gap: 0.6rem;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 0.5rem;
 }
 
-.day-meta-model {
-  flex: 1;
+.day-entry-date-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.day-entry-date {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.day-entry-project {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #ffffff;
+  background: #374151;
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
 }
 
 .day-entry-actions {
   display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.day-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 0;
+  cursor: pointer;
+  color: #ffffff;
+}
+
+.day-entry-body {
+  display: grid;
   gap: 0.5rem;
-  justify-content: flex-end;
 }
 
-.edit-button {
-  background: #374151;
+.day-entry-time-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
 }
 
-.remove-button {
-  background: #b91c1c;
+.day-entry-time-block {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.day-entry-time-block span {
+  font-size: 0.72rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.day-entry-time-block strong {
+  font-size: 1rem;
+  color: #111827;
+}
+
+.day-entry-time-sep {
+  color: #9ca3af;
+  font-size: 1rem;
+  flex: 1;
+  text-align: center;
+}
+
+.day-entry-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.day-entry-value-block {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.day-entry-value-block span {
+  font-size: 0.72rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.day-entry-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.day-entry-model-tag {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #374151;
+  background: #e5e7eb;
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  white-space: nowrap;
 }
 
 .modal-overlay {
@@ -541,6 +613,144 @@ button:hover {
   font-size: 0.9rem;
 }
 
+.project-autocomplete-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.project-autocomplete-field > span {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.project-autocomplete-wrapper {
+  position: relative;
+}
+
+.project-suggestions {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 0.3rem 0;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.project-suggestion-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: #111827;
+  cursor: pointer;
+}
+
+.project-suggestion-item:hover,
+.project-suggestion-item.active {
+  background: #f3f4f6;
+}
+
+.annual-summary {
+  gap: 1rem;
+}
+
+.annual-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.annual-year-field {
+  max-width: 160px;
+}
+
+.annual-year-field input {
+  -moz-appearance: textfield;
+}
+
+.annual-year-field input::-webkit-outer-spin-button,
+.annual-year-field input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.annual-totals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.annual-total-card {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.annual-total-value {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.annual-month-chart {
+  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+}
+
+.annual-months-table {
+  display: grid;
+  gap: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.annual-months-table-header,
+.annual-months-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr 2fr;
+  gap: 0;
+}
+
+.annual-months-table-header {
+  background: #1f2937;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.annual-months-table-header span,
+.annual-months-table-row span {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.annual-months-table-row {
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.annual-months-table-row:nth-child(even) {
+  background: #f9fafb;
+}
+
+.annual-month-name {
+  font-weight: 500;
+}
+
+.annual-months-table-total {
+  background: #f3f4f6 !important;
+  border-top: 2px solid #d1d5db !important;
+  font-weight: 600;
+}
+
+.annual-months-table-total span {
+  font-weight: 700;
+}
+
 @media (max-width: 720px) {
   .auth-actions {
     flex-direction: column;
@@ -606,5 +816,21 @@ button:hover {
 
   .edit-button {
     width: 100%;
+  }
+
+  .annual-totals-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .annual-months-table-header,
+  .annual-months-table-row {
+    grid-template-columns: 2fr 1fr 1.5fr 2fr;
+    font-size: 0.8rem;
+  }
+
+  .annual-months-table-header span,
+  .annual-months-table-row span {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.8rem;
   }
 }
