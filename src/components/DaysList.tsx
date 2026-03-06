@@ -8,6 +8,11 @@ type DaysListProps = {
   calculationModels: CalculationModel[];
   dayValuesById: Record<string, number>;
   projectNames: string[];
+  filterProject: string | null;
+  filterOptions: string[];
+  readOnly?: boolean;
+  noReverse?: boolean;
+  onFilterChange: (value: string | null) => void;
   onEditDay: (entry: DayEntryType) => void;
   onRemoveDay: (id: string) => void;
   onAddDay: (entry: Omit<DayEntryType, "id">) => void;
@@ -28,6 +33,11 @@ export function DaysList({
   calculationModels,
   dayValuesById,
   projectNames,
+  filterProject,
+  filterOptions,
+  readOnly,
+  noReverse,
+  onFilterChange,
   onEditDay,
   onRemoveDay,
   onAddDay,
@@ -177,13 +187,31 @@ export function DaysList({
     <section className="card">
       <div className="section-header">
         <h2>Dias Trabalhados</h2>
-        <button type="button" onClick={openCreateModal}>
-          Adicionar Dia
-        </button>
+        {!readOnly && filterOptions.length > 0 ? (
+          <label className="days-header-filter">
+            <span>Filtrar</span>
+            <select
+              value={filterProject ?? ""}
+              onChange={(e) => onFilterChange(e.target.value || null)}
+            >
+              <option value="">Todos</option>
+              {filterOptions.map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {!readOnly ? (
+          <button type="button" onClick={openCreateModal}>
+            Adicionar Dia
+          </button>
+        ) : null}
       </div>
 
       <div className="days-grid">
-        {[...days].reverse().map((entry) => (
+        {(noReverse ? days : [...days].reverse()).map((entry) => (
           <DayEntry
             key={entry.id}
             entry={entry}
@@ -193,6 +221,7 @@ export function DaysList({
               )?.name ?? "-"
             }
             dayValue={dayValuesById[entry.id] ?? 0}
+            readOnly={readOnly}
             onEdit={openEditModal}
             onRemove={onRemoveDay}
           />

@@ -4,6 +4,7 @@ type DayEntryProps = {
   entry: DayEntryType;
   calculationModelName: string;
   dayValue: number;
+  readOnly?: boolean;
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
 };
@@ -24,6 +25,7 @@ export function DayEntry({
   entry,
   calculationModelName,
   dayValue,
+  readOnly,
   onEdit,
   onRemove,
 }: DayEntryProps) {
@@ -37,6 +39,7 @@ export function DayEntry({
           ) : null}
         </div>
 
+        {readOnly ? null : (
         <div className="day-entry-actions">
           <button
             type="button"
@@ -86,6 +89,7 @@ export function DayEntry({
             </svg>
           </button>
         </div>
+        )}
       </div>
 
       <div className="day-entry-body">

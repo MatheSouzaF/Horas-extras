@@ -28,7 +28,7 @@ import { generateId } from "./utils/uuid";
 import "./App.css";
 
 const SESSION_STORAGE_KEY = "controle-mensal-horas-extras:session";
-const MONTH_STORAGE_KEY = "controle-mensal-horas-extras:selected-month";
+const GERAL_PAGE_SIZE = 20;
 
 type StoredState = {
   salary: Salary;
@@ -62,11 +62,13 @@ type HoursResponse = {
 };
 
 type AppTab = "config" | "days" | "stats" | "annual";
+type ViewMode = "mensal" | "geral";
 
 type ProjectSummaryItem = {
   label: string;
   hours: number;
   totalValue: number;
+  modelId: string | null;
 };
 
 const brlFormatter = new Intl.NumberFormat("pt-BR", {
@@ -241,15 +243,6 @@ const getCurrentMonth = (): string => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
-const loadSelectedMonth = (): string => {
-  const savedMonth = localStorage.getItem(MONTH_STORAGE_KEY);
-
-  if (savedMonth && /^\d{4}-\d{2}$/.test(savedMonth)) {
-    return savedMonth;
-  }
-
-  return getCurrentMonth();
-};
 
 const normalizeDays = (days: HoursResponse["days"]): DayEntry[] => {
   if (!days.length) {
@@ -340,18 +333,29 @@ function App() {
   const [days, setDays] = useState<DayEntry[]>(() => loadInitialState().days);
   const [activeTab, setActiveTab] = useState<AppTab>("days");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>(() =>
-    loadSelectedMonth(),
-  );
+  const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth);
   const [calculationModels, setCalculationModels] = useState<
     CalculationModel[]
   >(() => createDefaultModels());
+
+  const [pendingModelChange, setPendingModelChange] = useState<{
+    projectLabel: string;
+    newModelId: string;
+  } | null>(null);
+
+  const [filterProject, setFilterProject] = useState<string | null>(null);
 
   const [annualYear, setAnnualYear] = useState<string>(() =>
     String(new Date().getFullYear()),
   );
   const [annualMonths, setAnnualMonths] = useState<AnnualMonth[]>([]);
   const [isLoadingAnnual, setIsLoadingAnnual] = useState(false);
+
+  const [viewMode, setViewMode] = useState<ViewMode>("mensal");
+  const [geralDays, setGeralDays] = useState<DayEntry[]>([]);
+  const [isLoadingGeral, setIsLoadingGeral] = useState(false);
+  const [geralPage, setGeralPage] = useState(0);
+  const [geralError, setGeralError] = useState("");
 
   const requestWithRefresh = async <T,>(
     path: string,
@@ -402,9 +406,6 @@ function App() {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   }, [session]);
 
-  useEffect(() => {
-    localStorage.setItem(MONTH_STORAGE_KEY, selectedMonth);
-  }, [selectedMonth]);
 
   useEffect(() => {
     const fallbackModelId = calculationModels[0]?.id;
@@ -497,6 +498,40 @@ function App() {
 
     loadAnnual();
   }, [session, annualYear, activeTab]);
+
+  useEffect(() => {
+    const loadGeral = async () => {
+      if (!session || viewMode !== "geral") return;
+
+      try {
+        setIsLoadingGeral(true);
+        setGeralError("");
+        const response = await requestWithRefresh<HoursResponse>("/hours/all");
+        const normalizedDays = normalizeDays(response.days);
+        const fallbackModelId = calculationModels[0]?.id ?? "";
+        const mergedDays = normalizedDays
+          .map((day) => ({
+            ...day,
+            calculationModelId: day.calculationModelId || fallbackModelId,
+          }))
+          .sort((a, b) => b.date.localeCompare(a.date));
+        setGeralDays(mergedDays);
+        setGeralPage(0);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          setSession(null);
+          setAuthError("Sessão expirada. Faça login novamente.");
+          return;
+        }
+        setGeralError("Não foi possível carregar todos os registros.");
+        setGeralDays([]);
+      } finally {
+        setIsLoadingGeral(false);
+      }
+    };
+
+    loadGeral();
+  }, [session, viewMode]);
 
   useEffect(() => {
     if (!session || !isSyncReady) {
@@ -628,7 +663,7 @@ function App() {
   }, [days]);
 
   const projectSummary = useMemo<ProjectSummaryItem[]>(() => {
-    const projectMap = new Map<string, { hours: number; totalValue: number }>();
+    const projectMap = new Map<string, { hours: number; totalValue: number; modelIds: Set<string> }>();
     const modelMap = new Map(
       calculationModels.map((model) => [model.id, model]),
     );
@@ -646,16 +681,19 @@ function App() {
       }
 
       const label = day.projectWorked.trim() || "Sem projeto";
-      const current = projectMap.get(label) ?? { hours: 0, totalValue: 0 };
+      const current = projectMap.get(label) ?? { hours: 0, totalValue: 0, modelIds: new Set<string>() };
       const value = getDayValue(
         day,
         modelMap,
         Number.isFinite(valorHora) ? valorHora : 0,
       );
+      const dayModelId = day.calculationModelId || calculationModels[0]?.id || "";
+      current.modelIds.add(dayModelId);
 
       projectMap.set(label, {
         hours: current.hours + workedHours,
         totalValue: current.totalValue + value,
+        modelIds: current.modelIds,
       });
     });
 
@@ -665,6 +703,7 @@ function App() {
         label,
         hours: data.hours,
         totalValue: data.totalValue,
+        modelId: data.modelIds.size === 1 ? [...data.modelIds][0] : null,
       }));
   }, [days, salary, calculationModels]);
 
@@ -689,6 +728,38 @@ function App() {
     });
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [days]);
+
+  const geralTotals = useMemo<Totals>(() => {
+    const modelMap = new Map(calculationModels.map((model) => [model.id, model]));
+    const valorHora = salary / 160;
+    const hourlyValue = Number.isFinite(valorHora) ? valorHora : 0;
+    const totalHours = geralDays.reduce(
+      (acc, day) => acc + calculateWorkedHours(day.startTime, day.endTime),
+      0,
+    );
+    const totalValue = geralDays.reduce(
+      (acc, day) => acc + getDayValue(day, modelMap, hourlyValue),
+      0,
+    );
+    return { totalHours, totalValue };
+  }, [geralDays, salary, calculationModels]);
+
+  const geralDayValuesById = useMemo<Record<string, number>>(() => {
+    const modelMap = new Map(calculationModels.map((model) => [model.id, model]));
+    const valorHora = salary / 160;
+    const hourlyValue = Number.isFinite(valorHora) ? valorHora : 0;
+    return geralDays.reduce<Record<string, number>>((acc, day) => {
+      acc[day.id] = getDayValue(day, modelMap, hourlyValue);
+      return acc;
+    }, {});
+  }, [geralDays, salary, calculationModels]);
+
+  const geralPagedDays = useMemo(() => {
+    const start = geralPage * GERAL_PAGE_SIZE;
+    return geralDays.slice(start, start + GERAL_PAGE_SIZE);
+  }, [geralDays, geralPage]);
+
+  const geralTotalPages = Math.ceil(geralDays.length / GERAL_PAGE_SIZE);
 
   const handleDayEdit = (updatedEntry: DayEntry) => {
     setDays((currentDays) =>
@@ -760,6 +831,22 @@ function App() {
         };
       }),
     );
+  };
+
+  const handleConfirmProjectModelChange = () => {
+    if (!pendingModelChange) return;
+    const { projectLabel, newModelId } = pendingModelChange;
+
+    setDays((currentDays) =>
+      currentDays.map((day) => {
+        const label = day.projectWorked.trim() || "Sem projeto";
+        return label === projectLabel
+          ? { ...day, calculationModelId: newModelId }
+          : day;
+      }),
+    );
+
+    setPendingModelChange(null);
   };
 
   const handleRemoveModel = (id: string) => {
@@ -1065,6 +1152,76 @@ function App() {
 
               {activeTab === "days" ? (
                 <div className="days-layout">
+                  <div className="view-mode-toggle">
+                    <button
+                      type="button"
+                      className={viewMode === "mensal" ? "view-mode-button active" : "view-mode-button"}
+                      onClick={() => setViewMode("mensal")}
+                    >
+                      Mensal
+                    </button>
+                    <button
+                      type="button"
+                      className={viewMode === "geral" ? "view-mode-button active" : "view-mode-button"}
+                      onClick={() => { setViewMode("geral"); setGeralPage(0); }}
+                    >
+                      Resumo Geral
+                    </button>
+                  </div>
+
+                  {viewMode === "geral" ? (
+                    <>
+                      {isLoadingGeral ? (
+                        <p className="hint">Carregando todos os registros...</p>
+                      ) : geralError ? (
+                        <p className="error-message">{geralError}</p>
+                      ) : (
+                        <>
+                          <Summary totals={geralTotals} />
+
+                          <DaysList
+                            days={geralPagedDays}
+                            calculationModels={calculationModels}
+                            dayValuesById={geralDayValuesById}
+                            projectNames={[]}
+                            filterProject={null}
+                            filterOptions={[]}
+                            onFilterChange={() => {}}
+                            onEditDay={handleDayEdit}
+                            onRemoveDay={handleRemoveDay}
+                            onAddDay={handleAddDay}
+                            readOnly
+                            noReverse
+                          />
+
+                          {geralTotalPages > 1 ? (
+                            <div className="pagination">
+                              <button
+                                type="button"
+                                className="pagination-button"
+                                disabled={geralPage === 0}
+                                onClick={() => setGeralPage((p) => p - 1)}
+                              >
+                                ‹ Anterior
+                              </button>
+                              <span className="pagination-info">
+                                {geralPage + 1} / {geralTotalPages}
+                              </span>
+                              <button
+                                type="button"
+                                className="pagination-button"
+                                disabled={geralPage >= geralTotalPages - 1}
+                                onClick={() => setGeralPage((p) => p + 1)}
+                              >
+                                Próximo ›
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                  <>
                   <div className="days-overview-grid">
                     <section className="card month-selector">
                       <label className="field">
@@ -1090,6 +1247,7 @@ function App() {
                           por freela.
                         </p>
                       ) : (
+                        <>
                         <div className="inline-project-summary-list">
                           {projectSummary.map((item) => (
                             <article
@@ -1119,22 +1277,103 @@ function App() {
                                   {formatCurrency(item.totalValue)}
                                 </strong>
                               </p>
+                              <div className="project-model-row">
+                                <span className="day-entry-model-tag">
+                                  {item.modelId === null
+                                    ? "Vários modelos"
+                                    : (calculationModels.find((m) => m.id === item.modelId)?.name ?? "—")}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="project-model-edit-button"
+                                  title="Alterar modelo de cálculo"
+                                  onClick={() =>
+                                    setPendingModelChange({
+                                      projectLabel: item.label,
+                                      newModelId:
+                                        item.modelId ?? calculationModels[0]?.id ?? "",
+                                    })
+                                  }
+                                >
+                                  ✎
+                                </button>
+                              </div>
                             </article>
                           ))}
                         </div>
+
+                        {pendingModelChange ? (
+                          <div className="modal-overlay">
+                            <div className="modal-card">
+                              <h3>Alterar modelo de cálculo</h3>
+                              <p className="modal-warning-text">
+                                Isso vai sobrescrever o modelo de{" "}
+                                <strong>todos os dias</strong> do projeto{" "}
+                                <strong>{pendingModelChange.projectLabel}</strong>.
+                              </p>
+                              <label className="field">
+                                <span>Novo modelo</span>
+                                <select
+                                  value={pendingModelChange.newModelId}
+                                  onChange={(event) =>
+                                    setPendingModelChange({
+                                      ...pendingModelChange,
+                                      newModelId: event.target.value,
+                                    })
+                                  }
+                                >
+                                  {calculationModels.map((model) => (
+                                    <option key={model.id} value={model.id}>
+                                      {model.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <div className="modal-actions">
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  onClick={() => setPendingModelChange(null)}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleConfirmProjectModelChange}
+                                >
+                                  Confirmar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                        </>
                       )}
                     </section>
                   </div>
 
                   <DaysList
-                    days={days}
+                    days={
+                      filterProject === null
+                        ? days
+                        : days.filter(
+                            (d) =>
+                              (d.projectWorked.trim() || "Sem projeto") ===
+                              filterProject,
+                          )
+                    }
                     calculationModels={calculationModels}
                     dayValuesById={dayValuesById}
                     projectNames={projectNames}
+                    filterProject={filterProject}
+                    filterOptions={projectSummary.map((item) => item.label)}
+                    onFilterChange={setFilterProject}
                     onEditDay={handleDayEdit}
                     onRemoveDay={handleRemoveDay}
                     onAddDay={handleAddDay}
                   />
+                  </>
+                  )}
                 </div>
               ) : null}
 

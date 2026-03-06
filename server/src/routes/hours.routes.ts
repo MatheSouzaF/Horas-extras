@@ -315,6 +315,61 @@ hoursRoutes.put("/", ensureAuth, async (request: AuthRequest, response) => {
   return response.status(200).json({ message: "Horas salvas com sucesso." });
 });
 
+hoursRoutes.get(
+  "/all",
+  ensureAuth,
+  async (request: AuthRequest, response) => {
+    const userId = request.user?.sub;
+
+    if (!userId) {
+      return response.status(401).json({ message: "Não autenticado." });
+    }
+
+    const records = await prisma.monthlyRecord.findMany({
+      where: { userId },
+      include: {
+        dayEntries: {
+          orderBy: { date: "desc" },
+        },
+      },
+      orderBy: { month: "desc" },
+    });
+
+    if (records.length === 0) {
+      return response.status(200).json({ salary: 0, days: [], calculationModels: [] });
+    }
+
+    const mostRecentRecord = records[0];
+    const modelRows = await prisma.$queryRaw<
+      Array<{ modelsJson: string | null }>
+    >`
+      SELECT "modelsJson"
+      FROM "MonthlyRecord"
+      WHERE "id" = ${mostRecentRecord.id}
+      LIMIT 1
+    `;
+
+    const storedModels = parseStoredCalculationModels(modelRows[0]?.modelsJson);
+
+    const allDays = records.flatMap((record) =>
+      record.dayEntries.map((entry) => ({
+        id: entry.id,
+        date: entry.date.toISOString().slice(0, 10),
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        projectWorked: entry.projectWorked,
+        calculationModelId: entry.calculationModelId,
+      })),
+    );
+
+    return response.status(200).json({
+      salary: mostRecentRecord.salary,
+      calculationModels: storedModels,
+      days: allDays,
+    });
+  },
+);
+
 const yearSchema = z.string().regex(/^\d{4}$/);
 
 hoursRoutes.get(
