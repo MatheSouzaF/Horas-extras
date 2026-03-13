@@ -964,3 +964,193 @@ button:hover {
     font-size: 0.8rem;
   }
 }
+
+/* MonthNavigator */
+.month-navigator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.05);
+}
+
+.month-navigator-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: relative;
+}
+
+.month-navigator-arrow {
+  background: #f9fafb;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.month-navigator-arrow:hover {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+  opacity: 1;
+}
+
+.month-navigator-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  min-width: 160px;
+  text-align: center;
+  transition: background 0.15s;
+}
+
+.month-navigator-label:hover {
+  background: #f3f4f6;
+  opacity: 1;
+}
+
+.month-navigator-month {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.month-navigator-year {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #9ca3af;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.month-navigator-totals {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.month-navigator-totals--empty {
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  background: transparent;
+  border: none;
+}
+
+.month-navigator-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.45rem 1.1rem;
+}
+
+.month-navigator-stat-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.month-navigator-stat-label {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.month-navigator-totals-sep {
+  width: 1px;
+  height: 2rem;
+  background: #e5e7eb;
+  flex-shrink: 0;
+}
+
+.fix-buckets-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fix-buckets-button {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fix-buckets-button:hover {
+  color: #6b7280;
+  opacity: 1;
+}
+
+/* Aviso de mês incorreto no modal */
+.modal-month-warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.modal-month-warning-text {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #92400e;
+}
+
+.modal-month-warning-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.modal-month-warning-switch {
+  background: #d97706;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.modal-month-warning-ignore {
+  background: transparent;
+  color: #78350f;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}

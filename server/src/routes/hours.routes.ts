@@ -267,6 +267,14 @@ hoursRoutes.put("/", ensureAuth, async (request: AuthRequest, response) => {
 
   const { salary, days, calculationModels } = parsed.data;
 
+  const outsideMonth = days.filter((day) => !day.date.startsWith(monthParam));
+  if (outsideMonth.length > 0) {
+    console.warn(
+      `[hours] userId=${userId} salvou ${outsideMonth.length} dia(s) fora do mês ${monthParam}:`,
+      outsideMonth.map((d) => d.date),
+    );
+  }
+
   const monthlyRecord = await prisma.monthlyRecord.upsert({
     where: {
       userId_month: {
@@ -478,6 +486,64 @@ hoursRoutes.get(
     });
 
     return response.status(200).json({ year, months });
+  },
+);
+
+hoursRoutes.post(
+  "/fix-buckets",
+  ensureAuth,
+  async (request: AuthRequest, response) => {
+    const userId = request.user?.sub;
+
+    if (!userId) {
+      return response.status(401).json({ message: "Não autenticado." });
+    }
+
+    const records = await prisma.monthlyRecord.findMany({
+      where: { userId },
+      include: { dayEntries: true },
+    });
+
+    let movedCount = 0;
+    const log: Array<{ entryId: string; from: string; to: string; date: string }> = [];
+
+    await prisma.$transaction(async (tx) => {
+      for (const record of records) {
+        for (const entry of record.dayEntries) {
+          const dateStr = entry.date.toISOString().slice(0, 10);
+          const correctMonth = dateStr.slice(0, 7);
+
+          if (correctMonth === record.month) {
+            continue;
+          }
+
+          // Find or create the correct MonthlyRecord
+          let targetRecord = await tx.monthlyRecord.findUnique({
+            where: { userId_month: { userId, month: correctMonth } },
+          });
+
+          if (!targetRecord) {
+            targetRecord = await tx.monthlyRecord.create({
+              data: { userId, month: correctMonth, salary: record.salary },
+            });
+          }
+
+          await tx.dayEntry.update({
+            where: { id: entry.id },
+            data: { monthlyRecordId: targetRecord.id },
+          });
+
+          log.push({ entryId: entry.id, from: record.month, to: correctMonth, date: dateStr });
+          movedCount++;
+        }
+      }
+    });
+
+    if (movedCount > 0) {
+      console.log(`[fix-buckets] userId=${userId} moveu ${movedCount} dia(s):`, log);
+    }
+
+    return response.status(200).json({ moved: movedCount, details: log });
   },
 );
 

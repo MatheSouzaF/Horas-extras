@@ -10,6 +10,7 @@ import {
   STANDARD_MODEL_NAME,
 } from "./components/CalculationSettings";
 import { DaysList } from "./components/DaysList";
+import { MonthNavigator } from "./components/calcule/MonthNavigator";
 import { Summary } from "./components/Summary";
 import { StatisticsPanel } from "./components/StatisticsPanel";
 import { AnnualSummary } from "./components/AnnualSummary";
@@ -356,6 +357,7 @@ function App() {
   const [isLoadingGeral, setIsLoadingGeral] = useState(false);
   const [geralPage, setGeralPage] = useState(0);
   const [geralError, setGeralError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   const requestWithRefresh = async <T,>(
     path: string,
@@ -468,7 +470,7 @@ function App() {
     };
 
     loadHours();
-  }, [session, selectedMonth]);
+  }, [session, selectedMonth, reloadKey]);
 
   useEffect(() => {
     const loadAnnual = async () => {
@@ -781,6 +783,24 @@ function App() {
 
       return currentDays.filter((day) => day.id !== id);
     });
+  };
+
+  const handleFixBuckets = async () => {
+    try {
+      const result = await requestWithRefresh<{ moved: number }>(
+        "/hours/fix-buckets",
+        { method: "POST" },
+      );
+      if (result.moved === 0) {
+        alert("Nenhum registro fora do mês correto foi encontrado.");
+      } else {
+        alert(`${result.moved} registro(s) movido(s) para o mês correto.`);
+        setIsSyncReady(false);
+        setReloadKey((k) => k + 1);
+      }
+    } catch {
+      setAuthError("Falha ao corrigir os registros.");
+    }
   };
 
   const handleAddModel = () => {
@@ -1222,20 +1242,25 @@ function App() {
                     </>
                   ) : (
                   <>
-                  <div className="days-overview-grid">
-                    <section className="card month-selector">
-                      <label className="field">
-                        <span>Mês de referência</span>
-                        <input
-                          type="month"
-                          value={selectedMonth}
-                          onChange={(event) =>
-                            setSelectedMonth(event.target.value)
-                          }
-                        />
-                      </label>
-                    </section>
+                  <MonthNavigator
+                    value={selectedMonth}
+                    onChange={setSelectedMonth}
+                    totalHours={totals.totalHours}
+                    totalValue={totals.totalValue}
+                  />
 
+                  <div className="fix-buckets-row">
+                    <button
+                      type="button"
+                      className="fix-buckets-button"
+                      onClick={handleFixBuckets}
+                      title="Corrige registros salvos no mês errado, movendo cada dia para o mês correspondente à sua data"
+                    >
+                      Corrigir registros no mês errado
+                    </button>
+                  </div>
+
+                  <div className="days-overview-grid">
                     <Summary totals={totals} />
 
                     <section className="card inline-project-summary">
@@ -1367,10 +1392,12 @@ function App() {
                     projectNames={projectNames}
                     filterProject={filterProject}
                     filterOptions={projectSummary.map((item) => item.label)}
+                    selectedMonth={selectedMonth}
                     onFilterChange={setFilterProject}
                     onEditDay={handleDayEdit}
                     onRemoveDay={handleRemoveDay}
                     onAddDay={handleAddDay}
+                    onMonthChange={setSelectedMonth}
                   />
                   </>
                   )}

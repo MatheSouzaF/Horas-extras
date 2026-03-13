@@ -12,10 +12,12 @@ type DaysListProps = {
   filterOptions: string[];
   readOnly?: boolean;
   noReverse?: boolean;
+  selectedMonth?: string;
   onFilterChange: (value: string | null) => void;
   onEditDay: (entry: DayEntryType) => void;
   onRemoveDay: (id: string) => void;
   onAddDay: (entry: Omit<DayEntryType, "id">) => void;
+  onMonthChange?: (month: string) => void;
 };
 
 type DayFormState = Omit<DayEntryType, "id">;
@@ -37,10 +39,12 @@ export function DaysList({
   filterOptions,
   readOnly,
   noReverse,
+  selectedMonth,
   onFilterChange,
   onEditDay,
   onRemoveDay,
   onAddDay,
+  onMonthChange,
 }: DaysListProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -124,6 +128,27 @@ export function DaysList({
     setEditingId(null);
     setShowSuggestions(false);
   };
+
+  const dateMonth = formState.date ? formState.date.slice(0, 7) : "";
+  const isOutsideMonth =
+    Boolean(selectedMonth) &&
+    formState.date !== "" &&
+    dateMonth !== selectedMonth;
+
+  const outsideMonthLabel = isOutsideMonth
+    ? new Date(`${dateMonth}-01T12:00:00`).toLocaleDateString("pt-BR", {
+        month: "long",
+        year: "numeric",
+      })
+    : "";
+
+  const selectedMonthLabel =
+    selectedMonth
+      ? new Date(`${selectedMonth}-01T12:00:00`).toLocaleDateString("pt-BR", {
+          month: "long",
+          year: "numeric",
+        })
+      : "";
 
   const handleSave = () => {
     const validModelIds = new Set(calculationModels.map((model) => model.id));
@@ -246,6 +271,37 @@ export function DaysList({
                 }
               />
             </label>
+
+            {isOutsideMonth ? (
+              <div className="modal-month-warning">
+                <p className="modal-month-warning-text">
+                  ⚠ Esta data pertence a <strong>{outsideMonthLabel}</strong>,
+                  mas o mês de referência é <strong>{selectedMonthLabel}</strong>.
+                  O registro será salvo em {selectedMonthLabel}.
+                </p>
+                <div className="modal-month-warning-actions">
+                  {onMonthChange ? (
+                    <button
+                      type="button"
+                      className="modal-month-warning-switch"
+                      onClick={() => {
+                        onMonthChange(dateMonth);
+                        closeModal();
+                      }}
+                    >
+                      Trocar para {outsideMonthLabel}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="modal-month-warning-ignore"
+                    onClick={handleSave}
+                  >
+                    Salvar assim mesmo
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <label className="field">
               <span>Hora de entrada</span>
