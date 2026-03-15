@@ -1,1022 +1,247 @@
-import { useEffect, useMemo, useState } from "react";
+import { useRef, useState } from "react";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AuthPanel } from "./components/AuthPanel";
-import {
-  CalculationSettings,
-  createDefaultModels,
-  STANDARD_MODEL_ID,
-  STANDARD_MODEL_MULTIPLIER,
-  STANDARD_MODEL_NAME,
-} from "./components/CalculationSettings";
+import { CalculationSettings } from "./components/CalculationSettings";
 import { DaysList } from "./components/DaysList";
 import { MonthNavigator } from "./components/calcule/MonthNavigator";
 import { Summary } from "./components/Summary";
 import { StatisticsPanel } from "./components/StatisticsPanel";
 import { AnnualSummary } from "./components/AnnualSummary";
-import type { AnnualMonth } from "./components/AnnualSummary";
 import { UserSession } from "./components/UserSession";
-import { ApiError, apiRequest, refreshSession } from "./services/api";
-import type {
-  AuthUser,
-  CalculationModel,
-  DayEntry,
-  Salary,
-  Totals,
-} from "./types";
-import { generateId } from "./utils/uuid";
+import { ProjectSummaryCard } from "./components/ProjectSummaryCard";
+import type { DayEntry } from "./types";
+import { useAuth } from "./hooks/useAuth";
+import { useMonthlyData } from "./hooks/useMonthlyData";
+import { useGeralData } from "./hooks/useGeralData";
+import { useAnnualData } from "./hooks/useAnnualData";
+import { useTotals } from "./hooks/useTotals";
+import { useTheme } from "./hooks/useTheme";
+import {
+  formatDateToBr,
+  formatCurrency,
+  sanitizeFileNamePart,
+  formatUserName,
+} from "./lib/formatters";
+import { calculateWorkedHours } from "./lib/calculations";
+import { getCurrentMonth } from "./lib/data";
 
 import "./App.css";
 
-const SESSION_STORAGE_KEY = "controle-mensal-horas-extras:session";
-const GERAL_PAGE_SIZE = 20;
-
-type StoredState = {
-  salary: Salary;
-  days: DayEntry[];
-};
-
-type AuthSession = {
-  token: string;
-  refreshToken: string;
-  user: AuthUser;
-};
-
-type LoginResponse = {
-  token: string;
-  refreshToken: string;
-  user: AuthUser;
-};
-
-type HoursResponse = {
-  salary: Salary;
-  month: string;
-  calculationModels?: CalculationModel[];
-  days: Array<{
-    id?: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    projectWorked?: string;
-    calculationModelId?: string;
-  }>;
-};
-
 type AppTab = "config" | "days" | "stats" | "annual";
-type ViewMode = "mensal" | "geral";
 
-type ProjectSummaryItem = {
-  label: string;
-  hours: number;
-  totalValue: number;
-  modelId: string | null;
-};
-
-const brlFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-const formatCurrency = (value: number) => brlFormatter.format(value);
-
-const formatDateToBr = (date: string): string => {
-  if (!date) {
-    return "";
-  }
-
-  const [year, month, day] = date.split("-");
-
-  if (!year || !month || !day) {
-    return date;
-  }
-
-  return `${day}/${month}/${year}`;
-};
-
-const sanitizeFileNamePart = (value: string): string =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9-_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-
-const formatUserName = (name: string): string =>
-  name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-
-const createEmptyDay = (): DayEntry => ({
-  id: generateId(),
-  date: "",
-  startTime: "",
-  endTime: "",
-  projectWorked: "",
-  calculationModelId: "",
-});
-
-const NIGHT_START_MINUTES = 22 * 60;
-const NIGHT_END_MINUTES = 8 * 60;
-
-const toMinutes = (time: string): number => {
-  if (!time) {
-    return 0;
-  }
-
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
-const calculateWorkedHours = (startTime: string, endTime: string): number => {
-  if (!startTime || !endTime) {
-    return 0;
-  }
-
-  const start = toMinutes(startTime);
-  const end = toMinutes(endTime);
-
-  if (end === start) {
-    return 0;
-  }
-
-  const resolvedEnd = end < start ? end + 24 * 60 : end;
-
-  return (resolvedEnd - start) / 60;
-};
-
-const getDayOfWeek = (date: string, offset = 0): number => {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day + offset)).getUTCDay();
-};
-
-const isWeekend = (date: string, offset = 0): boolean => {
-  const dayOfWeek = getDayOfWeek(date, offset);
-  return dayOfWeek === 0 || dayOfWeek === 6;
-};
-
-const isNightMinute = (minuteOfDay: number): boolean =>
-  minuteOfDay >= NIGHT_START_MINUTES || minuteOfDay < NIGHT_END_MINUTES;
-
-const calculateStandardModelValue = (
-  day: DayEntry,
-  hourlyValue: number,
-  baseMultiplier: number,
-): number => {
-  if (!day.date || !day.startTime || !day.endTime) {
-    return 0;
-  }
-
-  const start = toMinutes(day.startTime);
-  const end = toMinutes(day.endTime);
-
-  if (start === end) {
-    return 0;
-  }
-
-  let cursor = start;
-  const resolvedEnd = end < start ? end + 24 * 60 : end;
-  let total = 0;
-
-  while (cursor < resolvedEnd) {
-    const dayOffset = Math.floor(cursor / (24 * 60));
-    const minuteOfDay = cursor % (24 * 60);
-    const currentDayStart = cursor - minuteOfDay;
-
-    const nextCutoff =
-      minuteOfDay < NIGHT_END_MINUTES
-        ? currentDayStart + NIGHT_END_MINUTES
-        : minuteOfDay < NIGHT_START_MINUTES
-          ? currentDayStart + NIGHT_START_MINUTES
-          : currentDayStart + 24 * 60;
-
-    const chunkEnd = Math.min(nextCutoff, resolvedEnd);
-    const chunkHours = (chunkEnd - cursor) / 60;
-    const multiplier =
-      isWeekend(day.date, dayOffset) || isNightMinute(minuteOfDay)
-        ? 2
-        : baseMultiplier;
-
-    total += chunkHours * hourlyValue * multiplier;
-    cursor = chunkEnd;
-  }
-
-  return total;
-};
-
-const getDayValue = (
-  day: DayEntry,
-  modelMap: Map<string, CalculationModel>,
-  hourlyValue: number,
-): number => {
-  const workedHours = calculateWorkedHours(day.startTime, day.endTime);
-
-  if (workedHours <= 0) {
-    return 0;
-  }
-
-  const model = modelMap.get(day.calculationModelId);
-  const effectiveHourlyValue =
-    model?.hourlyRate != null && model.hourlyRate > 0
-      ? model.hourlyRate
-      : hourlyValue;
-
-  if (model?.id === STANDARD_MODEL_ID) {
-    return calculateStandardModelValue(day, effectiveHourlyValue, model.multiplier);
-  }
-
-  const multiplier = model?.multiplier ?? 1;
-  return workedHours * effectiveHourlyValue * multiplier;
-};
-
-const loadInitialState = (): StoredState => {
-  return {
-    salary: 0,
-    days: [createEmptyDay()],
-  };
-};
-
-const getCurrentMonth = (): string => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-};
-
-
-const normalizeDays = (days: HoursResponse["days"]): DayEntry[] => {
-  if (!days.length) {
-    return [createEmptyDay()];
-  }
-
-  return days.map((day) => ({
-    id: day.id ?? generateId(),
-    date: day.date,
-    startTime: day.startTime,
-    endTime: day.endTime,
-    projectWorked: day.projectWorked ?? "",
-    calculationModelId: day.calculationModelId ?? "",
-  }));
-};
-
-const normalizeCalculationModels = (
-  models: HoursResponse["calculationModels"],
-): CalculationModel[] => {
-  if (!models?.length) {
-    return createDefaultModels();
-  }
-
-  const normalized = models
-    .filter((model) => model.id && model.name.trim())
-    .map((model) => ({
-      ...model,
-      name: model.name.trim(),
-      multiplier: Number(model.multiplier) > 0 ? Number(model.multiplier) : 1,
-      hourlyRate:
-        model.hourlyRate != null && Number(model.hourlyRate) > 0
-          ? Number(model.hourlyRate)
-          : undefined,
-    }));
-
-  return normalized.length > 0
-    ? ensureStandardModel(normalized)
-    : createDefaultModels();
-};
-
-const isSyncableDay = (
-  day: Pick<DayEntry, "date" | "startTime" | "endTime" | "calculationModelId">,
-) =>
-  Boolean(day.date && day.startTime && day.endTime && day.calculationModelId);
-
-const loadSession = (): AuthSession | null => {
-  const saved = localStorage.getItem(SESSION_STORAGE_KEY);
-
-  if (!saved) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(saved) as AuthSession;
-  } catch {
-    return null;
-  }
-};
-
-const ensureStandardModel = (
-  models: CalculationModel[],
-): CalculationModel[] => {
-  const standard = models.find((model) => model.id === STANDARD_MODEL_ID);
-  const normalizedStandard: CalculationModel = {
-    id: STANDARD_MODEL_ID,
-    name: STANDARD_MODEL_NAME,
-    multiplier: STANDARD_MODEL_MULTIPLIER,
-  };
-
-  if (standard) {
-    return [
-      normalizedStandard,
-      ...models.filter((model) => model.id !== STANDARD_MODEL_ID),
-    ];
-  }
-
-  return [normalizedStandard, ...models];
+const getTabFromPath = (pathname: string): AppTab => {
+  if (pathname === "/config") return "config";
+  if (pathname === "/stats") return "stats";
+  if (pathname.startsWith("/anual")) return "annual";
+  return "days";
 };
 
 function App() {
-  const [session, setSession] = useState<AuthSession | null>(() =>
-    loadSession(),
-  );
-  const [authError, setAuthError] = useState("");
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [isSyncReady, setIsSyncReady] = useState(false);
-  const [salary, setSalary] = useState<Salary>(() => loadInitialState().salary);
-  const [days, setDays] = useState<DayEntry[]>(() => loadInitialState().days);
-  const [activeTab, setActiveTab] = useState<AppTab>("days");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+
+  const {
+    session,
+    authError,
+    setAuthError,
+    login,
+    logout,
+    register,
+    requestWithRefresh,
+  } = useAuth();
+
+  // Derive navigation state from URL
+  const activeTab = getTabFromPath(location.pathname);
+  const mensalMatch = /^\/mes\/(\d{4}-\d{2})/.exec(location.pathname);
+  const selectedMonth = mensalMatch?.[1] ?? getCurrentMonth();
+  const annualMatch = /^\/anual\/(\d{4})/.exec(location.pathname);
+  const annualYear = annualMatch?.[1] ?? String(new Date().getFullYear());
+  const viewMode = location.pathname === "/geral" ? "geral" : "mensal";
+
+  const setSelectedMonth = (month: string) => navigate(`/mes/${month}`);
+  const setAnnualYear = (year: string) => navigate(`/anual/${year}`);
+
+  const {
+    salary,
+    setSalary,
+    days,
+    calculationModels,
+    isLoadingData,
+    syncStatus,
+    pendingModelChange,
+    setPendingModelChange,
+    handleDayEdit,
+    handleAddDay,
+    handleRemoveDay,
+    handleFixBuckets,
+    handleAddModel,
+    handleUpdateModel,
+    handleRemoveModel,
+    handleConfirmProjectModelChange,
+  } = useMonthlyData({
+    session,
+    requestWithRefresh,
+    setAuthError,
+    selectedMonth,
+  });
+
+  const { annualMonths, isLoadingAnnual } = useAnnualData({
+    session,
+    activeTab,
+    annualYear,
+    requestWithRefresh,
+  });
+
+  const {
+    totals,
+    dayHoursChart,
+    averageDailyHours,
+    projectHoursChart,
+    projectSummary,
+    dayValuesById,
+    projectNames,
+  } = useTotals({ days, salary, calculationModels });
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth);
-  const [calculationModels, setCalculationModels] = useState<
-    CalculationModel[]
-  >(() => createDefaultModels());
-
-  const [pendingModelChange, setPendingModelChange] = useState<{
-    projectLabel: string;
-    newModelId: string;
-  } | null>(null);
-
   const [filterProject, setFilterProject] = useState<string | null>(null);
 
-  const [annualYear, setAnnualYear] = useState<string>(() =>
-    String(new Date().getFullYear()),
-  );
-  const [annualMonths, setAnnualMonths] = useState<AnnualMonth[]>([]);
-  const [isLoadingAnnual, setIsLoadingAnnual] = useState(false);
-
-  const [viewMode, setViewMode] = useState<ViewMode>("mensal");
-  const [geralDays, setGeralDays] = useState<DayEntry[]>([]);
-  const [isLoadingGeral, setIsLoadingGeral] = useState(false);
-  const [geralPage, setGeralPage] = useState(0);
-  const [geralError, setGeralError] = useState("");
-  const [reloadKey, setReloadKey] = useState(0);
-
-  const requestWithRefresh = async <T,>(
-    path: string,
-    options: { method?: "GET" | "POST" | "PUT"; body?: unknown } = {},
-  ): Promise<T> => {
-    if (!session) {
-      throw new ApiError("Sessão inválida.", 401);
+  const [goalHours, setGoalHours] = useState<number>(() => {
+    const stored = localStorage.getItem("goalHours");
+    return stored ? Number(stored) : 0;
+  });
+  const handleGoalHoursChange = (value: number) => {
+    setGoalHours(value);
+    if (value > 0) {
+      localStorage.setItem("goalHours", String(value));
+    } else {
+      localStorage.removeItem("goalHours");
     }
+  };
+
+  type UndoToast = { id: string; entry: DayEntry; label: string };
+  const [undoToast, setUndoToast] = useState<UndoToast | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
+
+  const handleRemoveDayWithUndo = (id: string) => {
+    const entry = days.find((d) => d.id === id);
+    if (!entry) return;
+
+    const label = entry.projectWorked.trim() || entry.date || "Entrada";
+    setUndoToast({ id, entry, label });
+
+    if (undoTimerRef.current !== null) window.clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = window.setTimeout(() => {
+      handleRemoveDay(id);
+      setUndoToast(null);
+    }, 5000);
+  };
+
+  const handleUndoRemove = () => {
+    if (undoTimerRef.current !== null) window.clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+  };
+
+  const {
+    isLoadingGeral,
+    geralError,
+    geralPage,
+    setGeralPage,
+    geralTotals,
+    geralDayValuesById,
+    geralPagedDays,
+    geralTotalPages,
+  } = useGeralData({
+    session,
+    viewMode,
+    requestWithRefresh,
+    calculationModels,
+  });
+
+  const handleExportGeralCsv = async () => {
+    if (!session) return;
+
+    type ExportDay = {
+      id?: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      projectWorked?: string;
+      calculationModelId?: string;
+      calculatedValue?: number;
+    };
 
     try {
-      return await apiRequest<T>(path, {
-        method: options.method,
-        body: options.body,
-        token: session.token,
-      });
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 401) {
-        throw error;
-      }
-
-      const refreshed = await refreshSession<AuthUser>(session.refreshToken);
-      const newSession: AuthSession = {
-        token: refreshed.token,
-        refreshToken: refreshed.refreshToken,
-        user: refreshed.user,
-      };
-
-      setSession(newSession);
-
-      return apiRequest<T>(path, {
-        method: options.method,
-        body: options.body,
-        token: newSession.token,
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (!session) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      setSalary(0);
-      setDays([createEmptyDay()]);
-      setCalculationModels(createDefaultModels());
-      setIsSyncReady(false);
-      return;
-    }
-
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-  }, [session]);
-
-
-  useEffect(() => {
-    const fallbackModelId = calculationModels[0]?.id;
-
-    if (!fallbackModelId) {
-      return;
-    }
-
-    const validModelIds = new Set(calculationModels.map((model) => model.id));
-
-    setDays((currentDays) =>
-      currentDays.map((day) =>
-        day.calculationModelId && validModelIds.has(day.calculationModelId)
-          ? day
-          : { ...day, calculationModelId: fallbackModelId },
-      ),
-    );
-  }, [calculationModels]);
-
-  useEffect(() => {
-    const loadHours = async () => {
-      if (!session) {
-        return;
-      }
-
-      try {
-        setIsLoadingData(true);
-        const response = await requestWithRefresh<HoursResponse>(
-          `/hours?month=${selectedMonth}`,
-        );
-
-        const normalizedDays = normalizeDays(response.days);
-        const normalizedModels = normalizeCalculationModels(
-          response.calculationModels,
-        );
-
-        const mergedDays = normalizedDays.map((day) => {
-          const fallbackModelId = normalizedModels[0]?.id ?? "";
-
-          return {
-            ...day,
-            calculationModelId: day.calculationModelId || fallbackModelId,
-          };
-        });
-
-        setCalculationModels(normalizedModels);
-        setSalary(response.salary);
-        setDays(mergedDays);
-        setIsSyncReady(true);
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          setSession(null);
-          setAuthError("Sessão expirada. Faça login novamente.");
-          return;
-        }
-        setAuthError("Não foi possível carregar suas horas salvas.");
-      } finally {
-        setIsLoadingData(false);
-      }
-    };
-
-    loadHours();
-  }, [session, selectedMonth, reloadKey]);
-
-  useEffect(() => {
-    const loadAnnual = async () => {
-      if (!session || activeTab !== "annual") {
-        return;
-      }
-
-      try {
-        setIsLoadingAnnual(true);
-        const response = await requestWithRefresh<{
-          year: string;
-          months: AnnualMonth[];
-        }>(`/hours/annual?year=${annualYear}`);
-
-        setAnnualMonths(response.months);
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          setSession(null);
-          setAuthError("Sessão expirada. Faça login novamente.");
-          return;
-        }
-        setAnnualMonths([]);
-      } finally {
-        setIsLoadingAnnual(false);
-      }
-    };
-
-    loadAnnual();
-  }, [session, annualYear, activeTab]);
-
-  useEffect(() => {
-    const loadGeral = async () => {
-      if (!session || viewMode !== "geral") return;
-
-      try {
-        setIsLoadingGeral(true);
-        setGeralError("");
-        const response = await requestWithRefresh<HoursResponse>("/hours/all");
-        const normalizedDays = normalizeDays(response.days);
-        const fallbackModelId = calculationModels[0]?.id ?? "";
-        const mergedDays = normalizedDays
-          .map((day) => ({
-            ...day,
-            calculationModelId: day.calculationModelId || fallbackModelId,
-          }))
-          .sort((a, b) => b.date.localeCompare(a.date));
-        setGeralDays(mergedDays);
-        setGeralPage(0);
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          setSession(null);
-          setAuthError("Sessão expirada. Faça login novamente.");
-          return;
-        }
-        setGeralError("Não foi possível carregar todos os registros.");
-        setGeralDays([]);
-      } finally {
-        setIsLoadingGeral(false);
-      }
-    };
-
-    loadGeral();
-  }, [session, viewMode]);
-
-  useEffect(() => {
-    if (!session || !isSyncReady) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const completeDays = days
-          .map((day) => ({
-            date: day.date,
-            startTime: day.startTime,
-            endTime: day.endTime,
-            projectWorked: day.projectWorked,
-            calculationModelId:
-              day.calculationModelId || calculationModels[0]?.id || "",
-          }))
-          .filter(isSyncableDay);
-
-        await requestWithRefresh<{ message: string }>(
-          `/hours?month=${selectedMonth}`,
-          {
-            method: "PUT",
-            body: {
-              salary,
-              calculationModels,
-              days: completeDays,
-            },
-          },
-        );
-        if (authError === "Falha ao sincronizar os dados no servidor.") {
-          setAuthError("");
-        }
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          setSession(null);
-          setAuthError("Sessão expirada. Faça login novamente.");
-          return;
-        }
-
-        setAuthError("Falha ao sincronizar os dados no servidor.");
-      }
-    }, 500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [salary, days, session, selectedMonth, isSyncReady, calculationModels]);
-
-  const totals = useMemo<Totals>(() => {
-    const totalHours = days.reduce(
-      (accumulator, day) =>
-        accumulator + calculateWorkedHours(day.startTime, day.endTime),
-      0,
-    );
-
-    const valorHora = salary / 160;
-    const modelMap = new Map(
-      calculationModels.map((model) => [model.id, model]),
-    );
-
-    const totalValue = days.reduce(
-      (accumulator, day) =>
-        accumulator +
-        getDayValue(day, modelMap, Number.isFinite(valorHora) ? valorHora : 0),
-      0,
-    );
-
-    return {
-      totalHours,
-      totalValue,
-    };
-  }, [days, salary, calculationModels]);
-
-  const dayHoursChart = useMemo(() => {
-    const dateTotals = new Map<string, number>();
-
-    days.forEach((day) => {
-      if (!day.date || !day.startTime || !day.endTime) {
-        return;
-      }
-
-      const workedHours = calculateWorkedHours(day.startTime, day.endTime);
-
-      if (workedHours <= 0) {
-        return;
-      }
-
-      dateTotals.set(day.date, (dateTotals.get(day.date) ?? 0) + workedHours);
-    });
-
-    return Array.from(dateTotals.entries())
-      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-      .map(([label, hours]) => ({ label, hours }));
-  }, [days]);
-
-  const averageDailyHours = useMemo(() => {
-    if (dayHoursChart.length === 0) {
-      return 0;
-    }
-
-    const totalHours = dayHoursChart.reduce(
-      (accumulator, dayItem) => accumulator + dayItem.hours,
-      0,
-    );
-
-    return totalHours / dayHoursChart.length;
-  }, [dayHoursChart]);
-
-  const projectHoursChart = useMemo(() => {
-    const map = new Map<string, number>();
-
-    days.forEach((day) => {
-      if (!day.startTime || !day.endTime) {
-        return;
-      }
-
-      const workedHours = calculateWorkedHours(day.startTime, day.endTime);
-
-      if (workedHours <= 0) {
-        return;
-      }
-
-      const label = day.projectWorked.trim() || "Sem projeto";
-      map.set(label, (map.get(label) ?? 0) + workedHours);
-    });
-
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, hours]) => ({ label, hours }));
-  }, [days]);
-
-  const projectSummary = useMemo<ProjectSummaryItem[]>(() => {
-    const projectMap = new Map<string, { hours: number; totalValue: number; modelIds: Set<string> }>();
-    const modelMap = new Map(
-      calculationModels.map((model) => [model.id, model]),
-    );
-    const valorHora = salary / 160;
-
-    days.forEach((day) => {
-      if (!day.startTime || !day.endTime) {
-        return;
-      }
-
-      const workedHours = calculateWorkedHours(day.startTime, day.endTime);
-
-      if (workedHours <= 0) {
-        return;
-      }
-
-      const label = day.projectWorked.trim() || "Sem projeto";
-      const current = projectMap.get(label) ?? { hours: 0, totalValue: 0, modelIds: new Set<string>() };
-      const value = getDayValue(
-        day,
-        modelMap,
-        Number.isFinite(valorHora) ? valorHora : 0,
+      const response = await requestWithRefresh<{ days: ExportDay[] }>(
+        "/hours/all?page=0&limit=9999",
       );
-      const dayModelId = day.calculationModelId || calculationModels[0]?.id || "";
-      current.modelIds.add(dayModelId);
 
-      projectMap.set(label, {
-        hours: current.hours + workedHours,
-        totalValue: current.totalValue + value,
-        modelIds: current.modelIds,
-      });
-    });
-
-    return Array.from(projectMap.entries())
-      .sort((a, b) => b[1].hours - a[1].hours)
-      .map(([label, data]) => ({
-        label,
-        hours: data.hours,
-        totalValue: data.totalValue,
-        modelId: data.modelIds.size === 1 ? [...data.modelIds][0] : null,
-      }));
-  }, [days, salary, calculationModels]);
-
-  const dayValuesById = useMemo<Record<string, number>>(() => {
-    const modelMap = new Map(
-      calculationModels.map((model) => [model.id, model]),
-    );
-    const valorHora = salary / 160;
-    const hourlyValue = Number.isFinite(valorHora) ? valorHora : 0;
-
-    return days.reduce<Record<string, number>>((accumulator, day) => {
-      accumulator[day.id] = getDayValue(day, modelMap, hourlyValue);
-      return accumulator;
-    }, {});
-  }, [days, salary, calculationModels]);
-
-  const projectNames = useMemo<string[]>(() => {
-    const names = new Set<string>();
-    days.forEach((day) => {
-      const name = day.projectWorked.trim();
-      if (name) names.add(name);
-    });
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [days]);
-
-  const geralTotals = useMemo<Totals>(() => {
-    const modelMap = new Map(calculationModels.map((model) => [model.id, model]));
-    const valorHora = salary / 160;
-    const hourlyValue = Number.isFinite(valorHora) ? valorHora : 0;
-    const totalHours = geralDays.reduce(
-      (acc, day) => acc + calculateWorkedHours(day.startTime, day.endTime),
-      0,
-    );
-    const totalValue = geralDays.reduce(
-      (acc, day) => acc + getDayValue(day, modelMap, hourlyValue),
-      0,
-    );
-    return { totalHours, totalValue };
-  }, [geralDays, salary, calculationModels]);
-
-  const geralDayValuesById = useMemo<Record<string, number>>(() => {
-    const modelMap = new Map(calculationModels.map((model) => [model.id, model]));
-    const valorHora = salary / 160;
-    const hourlyValue = Number.isFinite(valorHora) ? valorHora : 0;
-    return geralDays.reduce<Record<string, number>>((acc, day) => {
-      acc[day.id] = getDayValue(day, modelMap, hourlyValue);
-      return acc;
-    }, {});
-  }, [geralDays, salary, calculationModels]);
-
-  const geralPagedDays = useMemo(() => {
-    const start = geralPage * GERAL_PAGE_SIZE;
-    return geralDays.slice(start, start + GERAL_PAGE_SIZE);
-  }, [geralDays, geralPage]);
-
-  const geralTotalPages = Math.ceil(geralDays.length / GERAL_PAGE_SIZE);
-
-  const handleDayEdit = (updatedEntry: DayEntry) => {
-    setDays((currentDays) =>
-      currentDays.map((day) =>
-        day.id === updatedEntry.id ? updatedEntry : day,
-      ),
-    );
-  };
-
-  const handleAddDay = (entry: Omit<DayEntry, "id">) => {
-    setDays((currentDays) => [...currentDays, { ...entry, id: generateId() }]);
-  };
-
-  const handleRemoveDay = (id: string) => {
-    setDays((currentDays) => {
-      if (currentDays.length === 1) {
-        return currentDays;
-      }
-
-      return currentDays.filter((day) => day.id !== id);
-    });
-  };
-
-  const handleFixBuckets = async () => {
-    try {
-      const result = await requestWithRefresh<{ moved: number }>(
-        "/hours/fix-buckets",
-        { method: "POST" },
+      const modelNameById = new Map(
+        calculationModels.map((m) => [m.id, m.name]),
       );
-      if (result.moved === 0) {
-        alert("Nenhum registro fora do mês correto foi encontrado.");
-      } else {
-        alert(`${result.moved} registro(s) movido(s) para o mês correto.`);
-        setIsSyncReady(false);
-        setReloadKey((k) => k + 1);
-      }
+
+      const header = "Data,Entrada,Saída,Horas,Projeto,Modelo,Valor";
+      const rows = response.days.map((day) => {
+        const hours = calculateWorkedHours(day.startTime, day.endTime);
+        const project = (day.projectWorked ?? "").trim() || "Sem projeto";
+        const model = modelNameById.get(day.calculationModelId ?? "") ?? "";
+        const value = day.calculatedValue ?? 0;
+        return [
+          formatDateToBr(day.date),
+          day.startTime,
+          day.endTime,
+          hours.toFixed(2),
+          `"${project.replace(/"/g, '""')}"`,
+          `"${model.replace(/"/g, '""')}"`,
+          `"${formatCurrency(value).replace(/"/g, '""')}"`,
+        ].join(",");
+      });
+
+      const csvContent = [header, ...rows].join("\n");
+      const blob = new Blob(["\uFEFF" + csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `horas-extras-${new Date().getFullYear()}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
     } catch {
-      setAuthError("Falha ao corrigir os registros.");
+      // silent — user will notice nothing happened
     }
-  };
-
-  const handleAddModel = () => {
-    setCalculationModels((current) => [
-      ...current,
-      {
-        id: generateId(),
-        name: `Modelo ${current.length + 1}`,
-        multiplier: 1.5,
-      },
-    ]);
-  };
-
-  const handleUpdateModel = (
-    id: string,
-    field: "name" | "multiplier" | "hourlyRate",
-    value: string,
-  ) => {
-    setCalculationModels((current) =>
-      current.map((model) => {
-        if (model.id !== id) {
-          return model;
-        }
-
-        if (id === STANDARD_MODEL_ID) {
-          return {
-            ...model,
-            name: STANDARD_MODEL_NAME,
-            multiplier: STANDARD_MODEL_MULTIPLIER,
-          };
-        }
-
-        if (field === "name") {
-          return { ...model, name: value };
-        }
-
-        if (field === "hourlyRate") {
-          const parsed = Number(value);
-          return {
-            ...model,
-            hourlyRate: value === "" || parsed <= 0 ? undefined : parsed,
-          };
-        }
-
-        return {
-          ...model,
-          multiplier: Number(value) > 0 ? Number(value) : model.multiplier,
-        };
-      }),
-    );
-  };
-
-  const handleConfirmProjectModelChange = () => {
-    if (!pendingModelChange) return;
-    const { projectLabel, newModelId } = pendingModelChange;
-
-    setDays((currentDays) =>
-      currentDays.map((day) => {
-        const label = day.projectWorked.trim() || "Sem projeto";
-        return label === projectLabel
-          ? { ...day, calculationModelId: newModelId }
-          : day;
-      }),
-    );
-
-    setPendingModelChange(null);
-  };
-
-  const handleRemoveModel = (id: string) => {
-    if (id === STANDARD_MODEL_ID) {
-      return;
-    }
-
-    setCalculationModels((current) => {
-      if (current.length <= 1) {
-        return current;
-      }
-
-      const fallbackModelId =
-        current.find((model) => model.id !== id)?.id ?? "";
-
-      setDays((currentDays) =>
-        currentDays.map((day) =>
-          day.calculationModelId === id
-            ? { ...day, calculationModelId: fallbackModelId }
-            : day,
-        ),
-      );
-
-      return current.filter((model) => model.id !== id);
-    });
-  };
-
-  const handleRegister = async (
-    name: string,
-    email: string,
-    password: string,
-  ) => {
-    if (!name || !email || !password) {
-      setAuthError("Preencha nome, email e senha.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setAuthError("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    try {
-      await apiRequest<{ user: AuthUser }>("/auth/register", {
-        method: "POST",
-        body: {
-          name,
-          email,
-          password,
-        },
-      });
-
-      const loginResponse = await apiRequest<LoginResponse>("/auth/login", {
-        method: "POST",
-        body: {
-          email,
-          password,
-        },
-      });
-
-      setSession(loginResponse);
-      setAuthError("");
-    } catch (error) {
-      setAuthError(
-        error instanceof Error ? error.message : "Erro ao cadastrar.",
-      );
-    }
-  };
-
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      const response = await apiRequest<LoginResponse>("/auth/login", {
-        method: "POST",
-        body: {
-          email,
-          password,
-          deviceName: `Web-${navigator.platform || "unknown"}`,
-        },
-      });
-
-      setSession(response);
-      setAuthError("");
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Erro ao entrar.");
-    }
-  };
-
-  const handleLogout = async () => {
-    if (session) {
-      try {
-        await apiRequest<{ message: string }>("/auth/logout", {
-          method: "POST",
-          body: {
-            refreshToken: session.refreshToken,
-          },
-        });
-      } catch {
-        setAuthError("Falha ao encerrar sessão no servidor.");
-      }
-    }
-
-    setSession(null);
   };
 
   const handleDownloadProjectPdf = (projectLabel: string) => {
-    if (!session) {
-      return;
-    }
+    if (!session) return;
 
     const normalizedProject = projectLabel.trim() || "Sem projeto";
-
     const projectDays = days
       .filter((day) => day.date && day.startTime && day.endTime)
-      .map((day) => {
-        const workedHours = calculateWorkedHours(day.startTime, day.endTime);
-
-        return {
-          ...day,
-          workedHours,
-          normalizedProject: day.projectWorked.trim() || "Sem projeto",
-        };
-      })
+      .map((day) => ({
+        ...day,
+        workedHours: calculateWorkedHours(day.startTime, day.endTime),
+        normalizedProject: day.projectWorked.trim() || "Sem projeto",
+      }))
       .filter(
         (day) =>
           day.workedHours > 0 && day.normalizedProject === normalizedProject,
       )
-      .sort((dayA, dayB) => {
-        const dateCompare = dayA.date.localeCompare(dayB.date);
-
-        if (dateCompare !== 0) {
-          return dateCompare;
-        }
-
-        return dayA.startTime.localeCompare(dayB.startTime);
+      .sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.startTime.localeCompare(b.startTime);
       });
 
-    if (projectDays.length === 0) {
-      return;
-    }
+    if (projectDays.length === 0) return;
 
-    const doc = new jsPDF({
-      unit: "pt",
-      format: "a4",
-    });
-
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
     const userName = formatUserName(session.user.name);
 
     doc.setFontSize(17);
     doc.text(userName, 40, 48);
-
     doc.setFontSize(12);
     doc.text(`Horas trabalhadas no ${normalizedProject}`, 40, 70);
 
@@ -1030,19 +255,11 @@ function App() {
         `${day.workedHours.toFixed(2)} h`,
       ]),
       theme: "grid",
-      styles: {
-        fontSize: 10,
-      },
-      headStyles: {
-        fillColor: [31, 41, 55],
-      },
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [31, 41, 55] },
     });
 
-    const totalHours = projectDays.reduce(
-      (accumulator, day) => accumulator + day.workedHours,
-      0,
-    );
-
+    const totalHours = projectDays.reduce((acc, day) => acc + day.workedHours, 0);
     const lastY = (doc as jsPDF & { lastAutoTable?: { finalY: number } })
       .lastAutoTable?.finalY;
 
@@ -1055,6 +272,13 @@ function App() {
 
     const safeProject = sanitizeFileNamePart(normalizedProject) || "projeto";
     doc.save(`horas-${safeProject}-${selectedMonth}.pdf`);
+  };
+
+  const navigateToTab = (tab: AppTab) => {
+    setIsSidebarOpen(false);
+    if (tab === "days") navigate(`/mes/${selectedMonth}`);
+    else if (tab === "annual") navigate(`/anual/${annualYear}`);
+    else navigate(`/${tab}`);
   };
 
   return (
@@ -1070,14 +294,20 @@ function App() {
       {!session ? (
         <AuthPanel
           errorMessage={authError}
-          onLogin={handleLogin}
-          onRegister={handleRegister}
+          onLogin={login}
+          onRegister={register}
         />
       ) : null}
 
       {session ? (
         <div className="content">
-          <UserSession name={session.user.name} onLogout={handleLogout} />
+          <UserSession
+            name={session.user.name}
+            syncStatus={syncStatus}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            onLogout={logout}
+          />
 
           {authError ? <p className="error-message">{authError}</p> : null}
 
@@ -1110,94 +340,128 @@ function App() {
             >
               <button
                 type="button"
-                className={
-                  activeTab === "days" ? "tab-button active" : "tab-button"
-                }
-                onClick={() => {
-                  setActiveTab("days");
-                  setIsSidebarOpen(false);
-                }}
+                className={activeTab === "days" ? "tab-button active" : "tab-button"}
+                onClick={() => navigateToTab("days")}
               >
                 Calcule
               </button>
               <button
                 type="button"
-                className={
-                  activeTab === "stats" ? "tab-button active" : "tab-button"
-                }
-                onClick={() => {
-                  setActiveTab("stats");
-                  setIsSidebarOpen(false);
-                }}
+                className={activeTab === "stats" ? "tab-button active" : "tab-button"}
+                onClick={() => navigateToTab("stats")}
               >
                 Estatísticas
               </button>
               <button
                 type="button"
-                className={
-                  activeTab === "config" ? "tab-button active" : "tab-button"
-                }
-                onClick={() => {
-                  setActiveTab("config");
-                  setIsSidebarOpen(false);
-                }}
+                className={activeTab === "config" ? "tab-button active" : "tab-button"}
+                onClick={() => navigateToTab("config")}
               >
                 Configuração
               </button>
               <button
                 type="button"
-                className={
-                  activeTab === "annual" ? "tab-button active" : "tab-button"
-                }
-                onClick={() => {
-                  setActiveTab("annual");
-                  setIsSidebarOpen(false);
-                }}
+                className={activeTab === "annual" ? "tab-button active" : "tab-button"}
+                onClick={() => navigateToTab("annual")}
               >
                 Resumo Anual
               </button>
             </aside>
 
             <section className="tab-content">
-              {activeTab === "config" ? (
-                <CalculationSettings
-                  salary={salary}
-                  onSalaryChange={setSalary}
-                  models={calculationModels}
-                  onAddModel={handleAddModel}
-                  onUpdateModel={handleUpdateModel}
-                  onRemoveModel={handleRemoveModel}
+              <Routes>
+                <Route
+                  path="/"
+                  element={<Navigate to={`/mes/${getCurrentMonth()}`} replace />}
                 />
-              ) : null}
 
-              {activeTab === "days" ? (
-                <div className="days-layout">
-                  <div className="view-mode-toggle">
-                    <button
-                      type="button"
-                      className={viewMode === "mensal" ? "view-mode-button active" : "view-mode-button"}
-                      onClick={() => setViewMode("mensal")}
-                    >
-                      Mensal
-                    </button>
-                    <button
-                      type="button"
-                      className={viewMode === "geral" ? "view-mode-button active" : "view-mode-button"}
-                      onClick={() => { setViewMode("geral"); setGeralPage(0); }}
-                    >
-                      Resumo Geral
-                    </button>
-                  </div>
+                <Route
+                  path="/config"
+                  element={
+                    <CalculationSettings
+                      salary={salary}
+                      onSalaryChange={setSalary}
+                      goalHours={goalHours}
+                      onGoalHoursChange={handleGoalHoursChange}
+                      models={calculationModels}
+                      onAddModel={handleAddModel}
+                      onUpdateModel={handleUpdateModel}
+                      onRemoveModel={handleRemoveModel}
+                    />
+                  }
+                />
 
-                  {viewMode === "geral" ? (
-                    <>
+                <Route
+                  path="/stats"
+                  element={
+                    <StatisticsPanel
+                      dayHours={dayHoursChart}
+                      projectHours={projectHoursChart}
+                      projectSummary={projectSummary}
+                      averageDailyHours={averageDailyHours}
+                      workedDaysCount={dayHoursChart.length}
+                    />
+                  }
+                />
+
+                <Route
+                  path="/anual/:year"
+                  element={
+                    <AnnualSummary
+                      year={annualYear}
+                      months={annualMonths}
+                      isLoading={isLoadingAnnual}
+                      onYearChange={setAnnualYear}
+                    />
+                  }
+                />
+
+                <Route
+                  path="/geral"
+                  element={
+                    <div className="days-layout">
+                      <div className="view-mode-toggle">
+                        <button
+                          type="button"
+                          className="view-mode-button"
+                          onClick={() => navigate(`/mes/${selectedMonth}`)}
+                        >
+                          Mensal
+                        </button>
+                        <button
+                          type="button"
+                          className="view-mode-button active"
+                          onClick={() => {
+                            navigate("/geral");
+                            setGeralPage(0);
+                          }}
+                        >
+                          Resumo Geral
+                        </button>
+                      </div>
+
                       {isLoadingGeral ? (
                         <p className="hint">Carregando todos os registros...</p>
                       ) : geralError ? (
                         <p className="error-message">{geralError}</p>
+                      ) : geralPagedDays.length === 0 ? (
+                        <div className="empty-state">
+                          <span className="empty-state-icon" aria-hidden="true">📋</span>
+                          <p className="empty-state-title">Nenhum registro encontrado</p>
+                          <p className="empty-state-hint">Adicione dias no modo Mensal para ver o resumo geral.</p>
+                        </div>
                       ) : (
                         <>
-                          <Summary totals={geralTotals} />
+                          <div className="geral-toolbar">
+                            <Summary totals={geralTotals} />
+                            <button
+                              type="button"
+                              className="export-csv-button"
+                              onClick={handleExportGeralCsv}
+                            >
+                              Exportar CSV
+                            </button>
+                          </div>
 
                           <DaysList
                             days={geralPagedDays}
@@ -1208,7 +472,7 @@ function App() {
                             filterOptions={[]}
                             onFilterChange={() => {}}
                             onEditDay={handleDayEdit}
-                            onRemoveDay={handleRemoveDay}
+                            onRemoveDay={handleRemoveDayWithUndo}
                             onAddDay={handleAddDay}
                             readOnly
                             noReverse
@@ -1239,191 +503,120 @@ function App() {
                           ) : null}
                         </>
                       )}
-                    </>
-                  ) : (
-                  <>
-                  <MonthNavigator
-                    value={selectedMonth}
-                    onChange={setSelectedMonth}
-                    totalHours={totals.totalHours}
-                    totalValue={totals.totalValue}
-                  />
-
-                  <div className="fix-buckets-row">
-                    <button
-                      type="button"
-                      className="fix-buckets-button"
-                      onClick={handleFixBuckets}
-                      title="Corrige registros salvos no mês errado, movendo cada dia para o mês correspondente à sua data"
-                    >
-                      Corrigir registros no mês errado
-                    </button>
-                  </div>
-
-                  <div className="days-overview-grid">
-                    <Summary totals={totals} />
-
-                    <section className="card inline-project-summary">
-                      <h2>Resumo por Projeto</h2>
-
-                      {projectSummary.length === 0 ? (
-                        <p className="hint">
-                          Adicione dias completos para ver os cálculos separados
-                          por freela.
-                        </p>
-                      ) : (
-                        <>
-                        <div className="inline-project-summary-list">
-                          {projectSummary.map((item) => (
-                            <article
-                              key={item.label}
-                              className="inline-project-summary-item"
-                            >
-                              <div className="inline-project-summary-item-header">
-                                <p>
-                                  <strong>{item.label}</strong>
-                                  <span>{item.hours.toFixed(2)} h</span>
-                                </p>
-                                <button
-                                  type="button"
-                                  className="project-download-button"
-                                  onClick={() =>
-                                    handleDownloadProjectPdf(item.label)
-                                  }
-                                  aria-label={`Baixar PDF de ${item.label}`}
-                                  title="Baixar PDF"
-                                >
-                                  ⬇
-                                </button>
-                              </div>
-                              <p>
-                                <span>Total calculado</span>
-                                <strong>
-                                  {formatCurrency(item.totalValue)}
-                                </strong>
-                              </p>
-                              <div className="project-model-row">
-                                <span className="day-entry-model-tag">
-                                  {item.modelId === null
-                                    ? "Vários modelos"
-                                    : (calculationModels.find((m) => m.id === item.modelId)?.name ?? "—")}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="project-model-edit-button"
-                                  title="Alterar modelo de cálculo"
-                                  onClick={() =>
-                                    setPendingModelChange({
-                                      projectLabel: item.label,
-                                      newModelId:
-                                        item.modelId ?? calculationModels[0]?.id ?? "",
-                                    })
-                                  }
-                                >
-                                  ✎
-                                </button>
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-
-                        {pendingModelChange ? (
-                          <div className="modal-overlay">
-                            <div className="modal-card">
-                              <h3>Alterar modelo de cálculo</h3>
-                              <p className="modal-warning-text">
-                                Isso vai sobrescrever o modelo de{" "}
-                                <strong>todos os dias</strong> do projeto{" "}
-                                <strong>{pendingModelChange.projectLabel}</strong>.
-                              </p>
-                              <label className="field">
-                                <span>Novo modelo</span>
-                                <select
-                                  value={pendingModelChange.newModelId}
-                                  onChange={(event) =>
-                                    setPendingModelChange({
-                                      ...pendingModelChange,
-                                      newModelId: event.target.value,
-                                    })
-                                  }
-                                >
-                                  {calculationModels.map((model) => (
-                                    <option key={model.id} value={model.id}>
-                                      {model.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <div className="modal-actions">
-                                <button
-                                  type="button"
-                                  className="secondary-button"
-                                  onClick={() => setPendingModelChange(null)}
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleConfirmProjectModelChange}
-                                >
-                                  Confirmar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                        </>
-                      )}
-                    </section>
-                  </div>
-
-                  <DaysList
-                    days={
-                      filterProject === null
-                        ? days
-                        : days.filter(
-                            (d) =>
-                              (d.projectWorked.trim() || "Sem projeto") ===
-                              filterProject,
-                          )
-                    }
-                    calculationModels={calculationModels}
-                    dayValuesById={dayValuesById}
-                    projectNames={projectNames}
-                    filterProject={filterProject}
-                    filterOptions={projectSummary.map((item) => item.label)}
-                    selectedMonth={selectedMonth}
-                    onFilterChange={setFilterProject}
-                    onEditDay={handleDayEdit}
-                    onRemoveDay={handleRemoveDay}
-                    onAddDay={handleAddDay}
-                    onMonthChange={setSelectedMonth}
-                  />
-                  </>
-                  )}
-                </div>
-              ) : null}
-
-              {activeTab === "stats" ? (
-                <StatisticsPanel
-                  dayHours={dayHoursChart}
-                  projectHours={projectHoursChart}
-                  projectSummary={projectSummary}
-                  averageDailyHours={averageDailyHours}
-                  workedDaysCount={dayHoursChart.length}
+                    </div>
+                  }
                 />
-              ) : null}
 
-              {activeTab === "annual" ? (
-                <AnnualSummary
-                  year={annualYear}
-                  months={annualMonths}
-                  isLoading={isLoadingAnnual}
-                  onYearChange={setAnnualYear}
+                <Route
+                  path="/mes/:month"
+                  element={
+                    <div className="days-layout">
+                      <div className="view-mode-toggle">
+                        <button
+                          type="button"
+                          className="view-mode-button active"
+                          onClick={() => navigate(`/mes/${selectedMonth}`)}
+                        >
+                          Mensal
+                        </button>
+                        <button
+                          type="button"
+                          className="view-mode-button"
+                          onClick={() => {
+                            navigate("/geral");
+                            setGeralPage(0);
+                          }}
+                        >
+                          Resumo Geral
+                        </button>
+                      </div>
+
+                      <MonthNavigator
+                        value={selectedMonth}
+                        onChange={setSelectedMonth}
+                        totalHours={totals.totalHours}
+                        totalValue={totals.totalValue}
+                      />
+
+                      <div className="fix-buckets-row">
+                        <button
+                          type="button"
+                          className="fix-buckets-button"
+                          onClick={handleFixBuckets}
+                          title="Corrige registros salvos no mês errado, movendo cada dia para o mês correspondente à sua data"
+                        >
+                          Corrigir registros no mês errado
+                        </button>
+                      </div>
+
+                      <div className="days-overview-grid">
+                        <Summary
+                          totals={totals}
+                          dayCount={dayHoursChart.length}
+                          selectedMonth={selectedMonth}
+                          salary={salary}
+                          goalHours={goalHours}
+                        />
+
+                        <ProjectSummaryCard
+                          projectSummary={projectSummary}
+                          calculationModels={calculationModels}
+                          pendingModelChange={pendingModelChange}
+                          onOpenModelChange={(label, modelId) =>
+                            setPendingModelChange({
+                              projectLabel: label,
+                              newModelId: modelId,
+                            })
+                          }
+                          onUpdatePendingModel={(newModelId) =>
+                            setPendingModelChange((prev) =>
+                              prev ? { ...prev, newModelId } : prev,
+                            )
+                          }
+                          onConfirmModelChange={handleConfirmProjectModelChange}
+                          onCancelModelChange={() => setPendingModelChange(null)}
+                          onDownloadPdf={handleDownloadProjectPdf}
+                        />
+                      </div>
+
+                      <DaysList
+                        days={
+                          filterProject === null
+                            ? days
+                            : days.filter(
+                                (d) =>
+                                  (d.projectWorked.trim() || "Sem projeto") ===
+                                  filterProject,
+                              )
+                        }
+                        calculationModels={calculationModels}
+                        dayValuesById={dayValuesById}
+                        salary={salary}
+                        projectNames={projectNames}
+                        filterProject={filterProject}
+                        filterOptions={projectSummary.map((item) => item.label)}
+                        selectedMonth={selectedMonth}
+                        onFilterChange={setFilterProject}
+                        onEditDay={handleDayEdit}
+                        onRemoveDay={handleRemoveDayWithUndo}
+                        onAddDay={handleAddDay}
+                        onMonthChange={setSelectedMonth}
+                      />
+                    </div>
+                  }
                 />
-              ) : null}
+              </Routes>
             </section>
           </div>
+        </div>
+      ) : null}
+
+      {undoToast ? (
+        <div className="undo-toast" role="status">
+          <span>Entrada removida: <strong>{undoToast.label}</strong></span>
+          <button type="button" className="undo-toast-button" onClick={handleUndoRemove}>
+            Desfazer
+          </button>
         </div>
       ) : null}
     </main>

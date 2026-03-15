@@ -762,7 +762,7 @@ button:hover {
 .annual-months-table-header,
 .annual-months-table-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1.5fr 2fr;
+  grid-template-columns: 2fr 1fr 1.5fr 1.5fr 2fr;
   gap: 0;
 }
 
@@ -954,7 +954,7 @@ button:hover {
 
   .annual-months-table-header,
   .annual-months-table-row {
-    grid-template-columns: 2fr 1fr 1.5fr 2fr;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 2fr;
     font-size: 0.8rem;
   }
 
@@ -1153,4 +1153,748 @@ button:hover {
   padding: 0.35rem 0.75rem;
   font-size: 0.82rem;
   cursor: pointer;
+}
+
+/* ── Sync badge ─────────────────────────────────────────────── */
+.session-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.session-card h2 {
+  margin: 0;
+}
+
+.session-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sync-badge {
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+}
+
+.sync-badge--saving {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.sync-badge--saved {
+  background: #dcfce7;
+  color: var(--color-success, #16a34a);
+}
+
+.sync-badge--error {
+  background: #fff7ed;
+  color: var(--color-warning, #d97706);
+}
+
+/* Botão de alternar tema (sol/lua) */
+.theme-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.theme-toggle-button:hover {
+  background: #e5e7eb;
+  opacity: 1;
+}
+
+/* ── Empty state ─────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.empty-state-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.empty-state-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #111827);
+}
+
+.empty-state-hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* ── Undo toast ─────────────────────────────────────────────── */
+.undo-toast {
+  position: fixed;
+  bottom: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 0.875rem;
+  z-index: 50;
+  white-space: nowrap;
+  animation: toast-in 0.2s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.undo-toast-button {
+  background: transparent;
+  color: #60a5fa;
+  border: 1px solid #60a5fa;
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undo-toast-button:hover {
+  background: #60a5fa;
+  color: #1f2937;
+}
+
+/* ── Modal value preview ────────────────────────────────────── */
+.modal-value-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.875rem;
+  color: #166534;
+}
+
+.modal-value-preview strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* ── 2.2 Tipografia — tabular nums em valores numéricos ──────── */
+.day-entry-value,
+.annual-total-value,
+.daily-average-value,
+.month-navigator-stat-value,
+.summary-kpi-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 2.3 Cards de Dia — Redesign ─────────────────────────────── */
+.day-entry-weekday {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.day-entry-weekday--weekend {
+  color: #dc2626;
+}
+
+/* Badge colorida por projeto — cor aplicada via inline style */
+.day-entry-project {
+  color: #ffffff;
+}
+
+/* Aumentar tamanho do valor */
+.day-entry-value {
+  font-size: 1.25rem;
+}
+
+/* Ações visíveis apenas no hover/focus (reduz poluição visual) */
+.day-entry-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.day-entry:hover .day-entry-actions,
+.day-entry:focus-within .day-entry-actions {
+  opacity: 1;
+}
+
+/* Em touch (sem hover real), sempre visível */
+@media (hover: none) {
+  .day-entry-actions {
+    opacity: 1;
+  }
+}
+
+/* ── Form error ──────────────────────────────────────────────── */
+.form-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+/* ── Password strength indicator ────────────────────────────── */
+.password-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.password-strength-bar {
+  height: 4px;
+  border-radius: 4px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.password-strength-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.password-strength-bar[data-strength="weak"] .password-strength-fill {
+  width: 33%;
+  background-color: #ef4444;
+}
+
+.password-strength-bar[data-strength="medium"] .password-strength-fill {
+  width: 66%;
+  background-color: #f59e0b;
+}
+
+.password-strength-bar[data-strength="strong"] .password-strength-fill {
+  width: 100%;
+  background-color: #22c55e;
+}
+
+.password-strength-label {
+  font-size: 0.78rem;
+}
+
+.password-strength-label[data-strength="weak"]   { color: #ef4444; }
+.password-strength-label[data-strength="medium"] { color: #f59e0b; }
+.password-strength-label[data-strength="strong"] { color: #22c55e; }
+
+/* ── Geral toolbar ───────────────────────────────────────────── */
+.geral-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.geral-toolbar .card {
+  flex: 1;
+}
+
+.export-csv-button {
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* ── CalculationSettings — model rate hint ───────────────────── */
+.model-rate-hint {
+  display: block;
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-top: 0.2rem;
+}
+
+/* ── Goal progress bar ───────────────────────────────────────── */
+.goal-progress {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.goal-progress-track {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  height: 100%;
+  background: #1f2937;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+.goal-progress-label {
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+
+/* ── 2.4 Resumo Mensal — KPI Cards ───────────────────────────── */
+.summary-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summary-kpi-card {
+  display: grid;
+  gap: 0.2rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.summary-kpi-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.summary-kpi-sub {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.1rem;
+}
+
+@media (max-width: 480px) {
+  .summary-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── 2.10 Gráficos — Tooltip no hover ────────────────────────── */
+.chart-column-item {
+  position: relative;
+}
+
+.chart-column-item[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: #f9fafb;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+
+.chart-column-item[data-tooltip]::after {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #111827;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.chart-column-item:hover[data-tooltip]::before,
+.chart-column-item:hover[data-tooltip]::after {
+  opacity: 1;
+}
+
+/* ── 2.11 Responsividade Mobile ─────────────────────────────── */
+
+/* Modal fullscreen em telas pequenas */
+@media (max-width: 480px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-card {
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+}
+
+/* Annual table — scroll horizontal em mobile */
+@media (max-width: 600px) {
+  .annual-months-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .annual-months-table-header,
+  .annual-months-table-row {
+    min-width: 580px;
+  }
+}
+
+
+/* ── 2.12 Dark Mode ───────────────────────────────────────────── */
+[data-theme="dark"] {
+  & body,
+  & {
+    background: #0f172a;
+    color: #f1f5f9;
+  }
+
+  & .card {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .card h2 {
+    color: #f1f5f9;
+  }
+
+  & .day-entry {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .day-entry-date {
+    color: #f1f5f9;
+  }
+
+  & .day-entry-weekday {
+    color: #94a3b8;
+  }
+
+  & .day-entry-weekday--weekend {
+    color: #f87171;
+  }
+
+  & .day-entry-time-row {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  & .day-entry-time-block span {
+    color: #94a3b8;
+  }
+
+  & .day-entry-time-block strong {
+    color: #f1f5f9;
+  }
+
+  & .day-entry-time-sep {
+    color: #64748b;
+  }
+
+  & .day-entry-value {
+    color: #f1f5f9;
+  }
+
+  & .day-entry-value-block span {
+    color: #94a3b8;
+  }
+
+  & .day-entry-model-tag {
+    background: #334155;
+    color: #94a3b8;
+  }
+
+  & input,
+  & select {
+    background: #1e293b;
+    border-color: #475569;
+    color: #f1f5f9;
+  }
+
+  & button {
+    background: #334155;
+    color: #f1f5f9;
+  }
+
+  & .tab-button {
+    background: #475569;
+  }
+
+  & .tab-button.active {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+
+  & .tabs-sidebar {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .modal-overlay {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  & .modal-card {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .modal-card h3 {
+    color: #f1f5f9;
+  }
+
+  & .secondary-button {
+    background: #475569;
+  }
+
+  & .model-item {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  & .summary-kpi-card {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  & .summary-kpi-value {
+    color: #f1f5f9;
+  }
+
+  & .goal-progress-track {
+    background: #334155;
+  }
+
+  & .goal-progress-fill {
+    background: #94a3b8;
+  }
+
+  & .form-error {
+    background: #450a0a;
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
+
+  & .inline-project-summary-item {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  & .inline-project-summary-item span {
+    color: #94a3b8;
+  }
+
+  & .project-download-button {
+    background: #1e293b;
+    border-color: #475569;
+    color: #f1f5f9;
+  }
+
+  & .project-model-edit-button {
+    background: #1e293b;
+    border-color: #475569;
+    color: #94a3b8;
+  }
+
+  & .month-navigator {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .month-navigator-arrow {
+    background: #0f172a;
+    border-color: #334155;
+    color: #94a3b8;
+  }
+
+  & .month-navigator-arrow:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #f1f5f9;
+  }
+
+  & .month-navigator-label:hover {
+    background: #334155;
+  }
+
+  & .month-navigator-month {
+    color: #f1f5f9;
+  }
+
+  & .month-navigator-totals {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  & .month-navigator-stat-value {
+    color: #f1f5f9;
+  }
+
+  & .chart-column-track {
+    background: #334155;
+  }
+
+  & .chart-label {
+    color: #94a3b8;
+  }
+
+  & .chart-value {
+    color: #cbd5e1;
+  }
+
+  & .project-summary-item {
+    border-color: #334155;
+  }
+
+  & .project-summary-values p {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  & .project-summary-values span {
+    color: #94a3b8;
+  }
+
+  & .annual-months-table {
+    border-color: #334155;
+  }
+
+  & .annual-months-table-header {
+    background: #0f172a;
+  }
+
+  & .annual-months-table-row {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .annual-months-table-row:nth-child(even) {
+    background: #0f172a;
+  }
+
+  & .annual-months-table-total {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+  }
+
+  & .view-mode-toggle {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  & .view-mode-button {
+    color: #94a3b8;
+  }
+
+  & .view-mode-button:hover {
+    background: #334155;
+    color: #f1f5f9;
+  }
+
+  & .view-mode-button.active {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+
+  & .pagination-button {
+    background: #1e293b;
+    border-color: #475569;
+    color: #94a3b8;
+  }
+
+  & .pagination-info {
+    background: #0f172a;
+    border-color: #334155;
+    color: #94a3b8;
+  }
+
+  & .days-header-filter > span {
+    color: #94a3b8;
+  }
+
+  & .hint {
+    color: #94a3b8;
+  }
+
+  & .error-message {
+    color: #f87171;
+  }
+
+  & .fix-buckets-button {
+    color: #64748b;
+  }
+
+  & .field span {
+    color: #94a3b8;
+  }
+
+  & .project-autocomplete-field > span {
+    color: #94a3b8;
+  }
+
+  & .project-suggestions {
+    background: #1e293b;
+    border-color: #475569;
+  }
+
+  & .project-suggestion-item {
+    color: #f1f5f9;
+  }
+
+  & .project-suggestion-item:hover,
+  & .project-suggestion-item.active {
+    background: #334155;
+  }
+
+  & .undo-toast {
+    background: #0f172a;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  & .sidebar-backdrop {
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  & .theme-toggle-button {
+    background: #334155;
+    color: #fbbf24;
+  }
 }

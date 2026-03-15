@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { createHash } from "node:crypto";
 import jwt from "jsonwebtoken";
@@ -19,7 +19,13 @@ const authRoutes = Router();
 const registerSchema = z.object({
   name: z.string().min(2, "Nome obrigatório"),
   email: z.email("Email inválido").toLowerCase(),
-  password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
+  password: z
+    .string()
+    .min(8, "Senha deve ter no mínimo 8 caracteres")
+    .regex(
+      /[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
+      "Senha deve conter pelo menos 1 número ou símbolo",
+    ),
 });
 
 const loginSchema = z.object({
@@ -28,16 +34,31 @@ const loginSchema = z.object({
   deviceName: z.string().trim().min(1).max(100).optional(),
 });
 
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1, "Refresh token obrigatório"),
-});
-
-const logoutSchema = z.object({
-  refreshToken: z.string().min(1, "Refresh token obrigatório"),
-});
 
 const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
+
+const isProduction = process.env.NODE_ENV === "production";
+
+const setAuthCookies = (
+  response: Response,
+  accessToken: string,
+  refreshTokenValue: string,
+) => {
+  response.cookie("access_token", accessToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 15 * 60 * 1000, // 15 minutes
+  });
+  response.cookie("refresh_token", refreshTokenValue, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: "/auth/refresh",
+  });
+};
 
 const getTokenExpirationDate = (token: string): Date => {
   const decoded = jwt.decode(token) as { exp?: number } | null;
@@ -193,9 +214,9 @@ authRoutes.post("/login", async (request, response) => {
     deviceName: deviceName ?? requestMetadata.deviceName,
   });
 
+  setAuthCookies(response, token, refreshToken);
+
   return response.status(200).json({
-    token,
-    refreshToken,
     user: {
       id: user.id,
       name: user.name,
@@ -205,13 +226,12 @@ authRoutes.post("/login", async (request, response) => {
 });
 
 authRoutes.post("/refresh", async (request, response) => {
-  const parsed = refreshSchema.safeParse(request.body);
+  const refreshToken =
+    (request.cookies as Record<string, string | undefined>).refresh_token;
 
-  if (!parsed.success) {
-    return response.status(400).json({ message: parsed.error.flatten() });
+  if (!refreshToken) {
+    return response.status(401).json({ message: "Refresh token não encontrado." });
   }
-
-  const { refreshToken } = parsed.data;
 
   try {
     const payload = jwt.verify(
@@ -253,36 +273,22 @@ authRoutes.post("/refresh", async (request, response) => {
     };
 
     const newAccessToken = buildAccessToken(tokenPayload);
-    const jwtOptions: SignOptions = {
-      expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions["expiresIn"],
-    };
 
-    const newRefreshPayload: RefreshTokenPayload = {
-      sub: user.id,
-      sid: refreshSession.id,
-      tokenType: "refresh",
-    };
-
-    const newRefreshToken = jwt.sign(
-      newRefreshPayload,
-      env.JWT_REFRESH_SECRET,
-      jwtOptions,
-    );
-
+    // Revoke current session and issue a fresh one (true token rotation)
     await prisma.refreshSession.update({
       where: { id: refreshSession.id },
-      data: {
-        tokenHash: hashToken(newRefreshToken),
-        expiresAt: getTokenExpirationDate(newRefreshToken),
-        lastUsedAt: new Date(),
-      },
+      data: { revokedAt: new Date() },
     });
 
-    return response.status(200).json({
-      token: newAccessToken,
-      refreshToken: newRefreshToken,
-      user,
+    const newRefreshToken = await createSessionRefreshToken(user.id, {
+      deviceName: refreshSession.deviceName ?? undefined,
+      userAgent: refreshSession.userAgent,
+      ipAddress: refreshSession.ipAddress,
     });
+
+    setAuthCookies(response, newAccessToken, newRefreshToken);
+
+    return response.status(200).json({ user });
   } catch {
     return response
       .status(401)
@@ -291,38 +297,37 @@ authRoutes.post("/refresh", async (request, response) => {
 });
 
 authRoutes.post("/logout", async (request, response) => {
-  const parsed = logoutSchema.safeParse(request.body);
+  const refreshToken =
+    (request.cookies as Record<string, string | undefined>).refresh_token;
 
-  if (!parsed.success) {
-    return response.status(400).json({ message: parsed.error.flatten() });
-  }
+  const clearCookies = () => {
+    response.clearCookie("access_token");
+    response.clearCookie("refresh_token", { path: "/auth/refresh" });
+  };
 
-  const { refreshToken } = parsed.data;
+  if (refreshToken) {
+    try {
+      const payload = jwt.verify(
+        refreshToken,
+        env.JWT_REFRESH_SECRET,
+      ) as RefreshTokenPayload;
 
-  try {
-    const payload = jwt.verify(
-      refreshToken,
-      env.JWT_REFRESH_SECRET,
-    ) as RefreshTokenPayload;
-
-    if (payload.tokenType !== "refresh") {
-      return response.status(200).json({ message: "Logout concluído." });
+      if (payload.tokenType === "refresh") {
+        await prisma.refreshSession.updateMany({
+          where: {
+            id: payload.sid,
+            userId: payload.sub,
+            revokedAt: null,
+          },
+          data: { revokedAt: new Date() },
+        });
+      }
+    } catch {
+      // Token already invalid — just clear cookies
     }
-
-    await prisma.refreshSession.updateMany({
-      where: {
-        id: payload.sid,
-        userId: payload.sub,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: new Date(),
-      },
-    });
-  } catch {
-    return response.status(200).json({ message: "Logout concluído." });
   }
 
+  clearCookies();
   return response.status(200).json({ message: "Logout concluído." });
 });
 

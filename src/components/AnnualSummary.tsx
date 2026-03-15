@@ -35,12 +35,8 @@ const MONTH_NAMES = [
   "Dezembro",
 ];
 
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
+import { formatCurrency } from "../lib/formatters";
 
-const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatHours = (value: number) => `${value.toFixed(2)} h`;
 
 const getMonthName = (month: string): string => {
@@ -184,6 +180,7 @@ export function AnnualSummary({
                     <span>Mês</span>
                     <span>Dias</span>
                     <span>Horas</span>
+                    <span>Salário Base</span>
                     <span>Total</span>
                   </div>
                   {months.map((m) => (
@@ -193,6 +190,7 @@ export function AnnualSummary({
                       </span>
                       <span>{m.workedDaysCount}</span>
                       <span>{formatHours(m.totalHours)}</span>
+                      <span>{m.salary > 0 ? formatCurrency(m.salary) : "—"}</span>
                       <span>{formatCurrency(m.totalValue)}</span>
                     </div>
                   ))}
@@ -200,6 +198,7 @@ export function AnnualSummary({
                     <span>Total</span>
                     <span>{totalDays}</span>
                     <span>{formatHours(totalHours)}</span>
+                    <span></span>
                     <span>{formatCurrency(totalValue)}</span>
                   </div>
                 </div>

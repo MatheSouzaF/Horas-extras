@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DayEntry } from "./DayEntry";
 import type { CalculationModel, DayEntry as DayEntryType } from "../types";
 import { STANDARD_MODEL_ID } from "./CalculationSettings";
+import { calculateWorkedHours, getDayValue } from "../lib/calculations";
+import { formatCurrency } from "../lib/formatters";
 
 type DaysListProps = {
   days: DayEntryType[];
   calculationModels: CalculationModel[];
   dayValuesById: Record<string, number>;
+  salary?: number;
   projectNames: string[];
   filterProject: string | null;
   filterOptions: string[];
@@ -34,6 +37,7 @@ export function DaysList({
   days,
   calculationModels,
   dayValuesById,
+  salary = 0,
   projectNames,
   filterProject,
   filterOptions,
@@ -49,6 +53,7 @@ export function DaysList({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formState, setFormState] = useState<DayFormState>(createEmptyForm());
+  const [formError, setFormError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const projectInputRef = useRef<HTMLInputElement>(null);
   const blurTimeoutRef = useRef<number | null>(null);
@@ -126,8 +131,27 @@ export function DaysList({
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
+    setFormError("");
     setShowSuggestions(false);
   };
+
+  const previewValue = useMemo(() => {
+    if (!formState.date || !formState.startTime || !formState.endTime) return null;
+    const workedHours = calculateWorkedHours(formState.startTime, formState.endTime);
+    if (workedHours <= 0) return null;
+    const modelMap = new Map(calculationModels.map((m) => [m.id, m]));
+    const hourlyValue = salary > 0 ? salary / 160 : 0;
+    const pseudoDay: DayEntryType = {
+      id: "",
+      date: formState.date,
+      startTime: formState.startTime,
+      endTime: formState.endTime,
+      projectWorked: formState.projectWorked,
+      calculationModelId: formState.calculationModelId,
+    };
+    const value = getDayValue(pseudoDay, modelMap, hourlyValue);
+    return { workedHours, value };
+  }, [formState.date, formState.startTime, formState.endTime, formState.calculationModelId, calculationModels, salary]);
 
   const dateMonth = formState.date ? formState.date.slice(0, 7) : "";
   const isOutsideMonth =
@@ -151,6 +175,7 @@ export function DaysList({
       : "";
 
   const handleSave = () => {
+    setFormError("");
     const validModelIds = new Set(calculationModels.map((model) => model.id));
     const fallbackModelId = calculationModels[0]?.id ?? "";
     const resolvedModelId =
@@ -166,6 +191,14 @@ export function DaysList({
       !formState.projectWorked.trim() ||
       !resolvedModelId
     ) {
+      return;
+    }
+
+    const isDuplicate = days.some(
+      (d) => d.date === formState.date && d.id !== editingId,
+    );
+    if (isDuplicate) {
+      setFormError("Já existe uma entrada para esta data. Edite a existente.");
       return;
     }
 
@@ -235,23 +268,31 @@ export function DaysList({
         ) : null}
       </div>
 
-      <div className="days-grid">
-        {(noReverse ? days : [...days].reverse()).map((entry) => (
-          <DayEntry
-            key={entry.id}
-            entry={entry}
-            calculationModelName={
-              calculationModels.find(
-                (model) => model.id === entry.calculationModelId,
-              )?.name ?? "-"
-            }
-            dayValue={dayValuesById[entry.id] ?? 0}
-            readOnly={readOnly}
-            onEdit={openEditModal}
-            onRemove={onRemoveDay}
-          />
-        ))}
-      </div>
+      {days.filter((d) => d.date && d.startTime && d.endTime).length === 0 && !readOnly ? (
+        <div className="empty-state">
+          <span className="empty-state-icon" aria-hidden="true">📋</span>
+          <p className="empty-state-title">Nenhum dia registrado</p>
+          <p className="empty-state-hint">Clique em "Adicionar Dia" para começar.</p>
+        </div>
+      ) : (
+        <div className="days-grid">
+          {(noReverse ? days : [...days].reverse()).map((entry) => (
+            <DayEntry
+              key={entry.id}
+              entry={entry}
+              calculationModelName={
+                calculationModels.find(
+                  (model) => model.id === entry.calculationModelId,
+                )?.name ?? "-"
+              }
+              dayValue={dayValuesById[entry.id] ?? 0}
+              readOnly={readOnly}
+              onEdit={openEditModal}
+              onRemove={onRemoveDay}
+            />
+          ))}
+        </div>
+      )}
 
       {isModalOpen ? (
         <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -263,12 +304,13 @@ export function DaysList({
               <input
                 type="date"
                 value={formState.date}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setFormError("");
                   setFormState((current) => ({
                     ...current,
                     date: event.target.value,
-                  }))
-                }
+                  }));
+                }}
               />
             </label>
 
@@ -392,6 +434,17 @@ export function DaysList({
                 ))}
               </select>
             </label>
+
+            {formError ? (
+              <p className="form-error">{formError}</p>
+            ) : null}
+
+            {previewValue ? (
+              <div className="modal-value-preview">
+                <span>{previewValue.workedHours.toFixed(2)} h trabalhadas</span>
+                <strong>{formatCurrency(previewValue.value)}</strong>
+              </div>
+            ) : null}
 
             <div className="modal-actions">
               <button

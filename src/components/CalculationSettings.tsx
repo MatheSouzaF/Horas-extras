@@ -1,4 +1,5 @@
 import type { CalculationModel, Salary } from "../types";
+import { formatCurrency } from "../lib/formatters";
 
 export const STANDARD_MODEL_ID = "default-standard";
 export const STANDARD_MODEL_NAME = "CLT Padrão";
@@ -7,6 +8,8 @@ export const STANDARD_MODEL_MULTIPLIER = 1.5;
 type CalculationSettingsProps = {
   salary: Salary;
   onSalaryChange: (value: Salary) => void;
+  goalHours: number;
+  onGoalHoursChange: (value: number) => void;
   models: CalculationModel[];
   onAddModel: () => void;
   onUpdateModel: (
@@ -20,6 +23,8 @@ type CalculationSettingsProps = {
 export function CalculationSettings({
   salary,
   onSalaryChange,
+  goalHours,
+  onGoalHoursChange,
   models,
   onAddModel,
   onUpdateModel,
@@ -42,6 +47,20 @@ export function CalculationSettings({
       </label>
 
       <p className="hint">Base fixa de cálculo: 160 horas/mês</p>
+
+      <label className="field">
+        <span>Meta de horas mensais</span>
+        <input
+          type="number"
+          min={0}
+          step="0.5"
+          value={goalHours || ""}
+          onChange={(event) =>
+            onGoalHoursChange(Number(event.target.value) || 0)
+          }
+          placeholder="Ex.: 40 (deixe vazio para desativar)"
+        />
+      </label>
 
       <div className="section-header models-header">
         <h3>Modelos de cálculo</h3>
@@ -95,6 +114,21 @@ export function CalculationSettings({
                     }
                     placeholder="Deixe vazio para usar salário ÷ 160"
                   />
+                  <span className="hint model-rate-hint">
+                    Taxa efetiva:{" "}
+                    <strong>
+                      {formatCurrency(
+                        (model.hourlyRate ?? (salary > 0 ? salary / 160 : 0)) *
+                          model.multiplier,
+                      )}
+                    </strong>
+                    /h
+                    {model.hourlyRate
+                      ? " (taxa personalizada)"
+                      : salary > 0
+                        ? " (salário ÷ 160)"
+                        : " (salário não configurado)"}
+                  </span>
                 </label>
 
                 <button

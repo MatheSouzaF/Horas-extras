@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: horas-extras-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: horas
+      POSTGRES_PASSWORD: horas_secret
+      POSTGRES_DB: horas_extras
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d   # scripts rodados na 1ª inicialização
+
+volumes:
+  postgres_data:

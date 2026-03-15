@@ -8,16 +8,19 @@ export function ensureAuth(
   response: Response,
   next: NextFunction,
 ) {
+  const cookieToken = (request.cookies as Record<string, string | undefined>)
+    .access_token;
+
+  // Fallback to Authorization header (for API clients / backwards compat)
   const authHeader = request.headers.authorization;
+  const headerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : undefined;
 
-  if (!authHeader) {
-    return response.status(401).json({ message: "Token não informado." });
-  }
-
-  const [, token] = authHeader.split(" ");
+  const token = cookieToken ?? headerToken;
 
   if (!token) {
-    return response.status(401).json({ message: "Token inválido." });
+    return response.status(401).json({ message: "Token não informado." });
   }
 
   try {

@@ -1,15 +1,10 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3333";
+// In dev, Vite proxies /auth and /hours to localhost:3333.
+// In production, set VITE_API_URL if the API is on a different origin.
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT";
-  token?: string;
   body?: unknown;
-};
-
-type RefreshResponse<TUser> = {
-  token: string;
-  refreshToken: string;
-  user: TUser;
 };
 
 export class ApiError extends Error {
@@ -26,17 +21,10 @@ export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-
-  if (options.token) {
-    headers.Authorization = `Bearer ${options.token}`;
-  }
-
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? "GET",
-    headers,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
@@ -51,11 +39,6 @@ export async function apiRequest<T>(
   return data as T;
 }
 
-export async function refreshSession<TUser>(
-  refreshToken: string,
-): Promise<RefreshResponse<TUser>> {
-  return apiRequest<RefreshResponse<TUser>>("/auth/refresh", {
-    method: "POST",
-    body: { refreshToken },
-  });
+export async function refreshSession<TUser>(): Promise<{ user: TUser }> {
+  return apiRequest<{ user: TUser }>("/auth/refresh", { method: "POST" });
 }

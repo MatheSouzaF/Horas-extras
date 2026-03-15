@@ -17,14 +17,9 @@ type StatisticsPanelProps = {
   workedDaysCount: number;
 };
 
+import { formatCurrency } from "../lib/formatters";
+
 const formatHours = (value: number) => `${value.toFixed(2)} h`;
-
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
-
-const formatCurrency = (value: number) => currencyFormatter.format(value);
 
 type ChartCardProps = {
   title: string;
@@ -66,7 +61,11 @@ function ChartCard({
               : "#1f2937";
 
             return (
-              <div key={item.label} className="chart-column-item">
+              <div
+                key={item.label}
+                className="chart-column-item"
+                data-tooltip={`${item.label}: ${formatHours(item.hours)}`}
+              >
                 <strong className="chart-value">
                   {formatHours(item.hours)}
                 </strong>
