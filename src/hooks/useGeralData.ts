@@ -26,6 +26,8 @@ type GeralResponse = {
     calculatedValue?: number;
   }>;
   total: number;
+  totalHours: number;
+  totalValue: number;
   page: number;
   hasMore: boolean;
 };
@@ -51,6 +53,7 @@ export function useGeralData({
   const [geralPage, setGeralPage] = useState(0);
   const [geralError, setGeralError] = useState("");
   const [geralTotal, setGeralTotal] = useState(0);
+  const [geralGlobalTotals, setGeralGlobalTotals] = useState({ totalHours: 0, totalValue: 0 });
 
   useEffect(() => {
     const loadGeral = async () => {
@@ -79,6 +82,7 @@ export function useGeralData({
         setGeralDays(normalizedDays);
         setGeralPreCalculatedValues(preCalc);
         setGeralTotal(response.total);
+        setGeralGlobalTotals({ totalHours: response.totalHours ?? 0, totalValue: response.totalValue ?? 0 });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) return;
         setGeralError("Não foi possível carregar todos os registros.");
@@ -91,22 +95,7 @@ export function useGeralData({
     loadGeral();
   }, [session, viewMode, geralPage]);
 
-  const geralTotals = useMemo(() => {
-    const totalHours = geralDays.reduce((acc, day) => {
-      const [sh, sm] = day.startTime.split(":").map(Number);
-      const [eh, em] = day.endTime.split(":").map(Number);
-      const start = sh * 60 + sm;
-      const end = eh * 60 + em;
-      if (start === end) return acc;
-      const resolvedEnd = end < start ? end + 24 * 60 : end;
-      return acc + (resolvedEnd - start) / 60;
-    }, 0);
-    const totalValue = geralDays.reduce(
-      (acc, day) => acc + (geralPreCalculatedValues[day.id] ?? 0),
-      0,
-    );
-    return { totalHours, totalValue };
-  }, [geralDays, geralPreCalculatedValues]);
+  const geralTotals = geralGlobalTotals;
 
   const geralDayValuesById = useMemo<Record<string, number>>(() => {
     return geralDays.reduce<Record<string, number>>((acc, day) => {

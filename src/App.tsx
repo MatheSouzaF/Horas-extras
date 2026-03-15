@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -9,7 +9,6 @@ import { MonthNavigator } from "./components/calcule/MonthNavigator";
 import { Summary } from "./components/Summary";
 import { StatisticsPanel } from "./components/StatisticsPanel";
 import { AnnualSummary } from "./components/AnnualSummary";
-import { UserSession } from "./components/UserSession";
 import { ProjectSummaryCard } from "./components/ProjectSummaryCard";
 import type { DayEntry } from "./types";
 import { useAuth } from "./hooks/useAuth";
@@ -38,6 +37,88 @@ const getTabFromPath = (pathname: string): AppTab => {
   return "days";
 };
 
+function CalcIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <line x1="8" y1="8" x2="16" y2="8" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+      <line x1="8" y1="16" x2="13" y2="16" />
+    </svg>
+  );
+}
+
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6"  y1="20" x2="6"  y2="14" />
+      <line x1="2"  y1="20" x2="22" y2="20" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8"  y1="2" x2="8"  y2="6" />
+      <line x1="3"  y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+const NAV_ITEMS: { tab: AppTab; icon: React.ReactNode; label: string }[] = [
+  { tab: "days",   icon: <CalcIcon />,     label: "Calcule" },
+  { tab: "stats",  icon: <ChartIcon />,    label: "Estatísticas" },
+  { tab: "annual", icon: <CalendarIcon />, label: "Resumo Anual" },
+  { tab: "config", icon: <SettingsIcon />, label: "Configuração" },
+];
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1"  x2="12" y2="3"  />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"  />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1"  y1="12" x2="3"  y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36" />
+      <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"  />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -53,7 +134,6 @@ function App() {
     requestWithRefresh,
   } = useAuth();
 
-  // Derive navigation state from URL
   const activeTab = getTabFromPath(location.pathname);
   const mensalMatch = /^\/mes\/(\d{4}-\d{2})/.exec(location.pathname);
   const selectedMonth = mensalMatch?.[1] ?? getCurrentMonth();
@@ -76,7 +156,6 @@ function App() {
     handleDayEdit,
     handleAddDay,
     handleRemoveDay,
-    handleFixBuckets,
     handleAddModel,
     handleUpdateModel,
     handleRemoveModel,
@@ -210,7 +289,7 @@ function App() {
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      // silent — user will notice nothing happened
+      // silent
     }
   };
 
@@ -281,335 +360,358 @@ function App() {
     else navigate(`/${tab}`);
   };
 
-  return (
-    <main className="container">
-      <header className="header">
-        <h1>Controle Mensal de Horas Extras</h1>
-        <p>
-          Configure seus modelos de cálculo e registre os dias por projeto para
-          acompanhar os valores do mês.
-        </p>
-      </header>
+  const syncBadge = {
+    idle:   null,
+    saving: { label: "⟳ Salvando...", cls: "sync-badge sync-badge--saving" },
+    saved:  { label: "● Salvo",       cls: "sync-badge sync-badge--saved"  },
+    error:  { label: "⚠ Erro",        cls: "sync-badge sync-badge--error"  },
+  }[syncStatus] ?? null;
 
-      {!session ? (
-        <AuthPanel
-          errorMessage={authError}
-          onLogin={login}
-          onRegister={register}
+  const displayName = session
+    ? (session.user.name.trim().charAt(0).toUpperCase() + session.user.name.trim().slice(1)) || "Usuário"
+    : "";
+
+  // ── Auth state ──────────────────────────────────────────────
+  if (!session) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-shell-inner">
+          <header className="auth-header">
+            <div className="auth-brand">
+              <div className="auth-brand-logo"><ClockIcon /></div>
+              <div>
+                <h1 className="auth-brand-name">Horas Extras</h1>
+                <p className="auth-brand-sub">Controle mensal de horas</p>
+              </div>
+            </div>
+          </header>
+          <AuthPanel
+            errorMessage={authError}
+            onLogin={login}
+            onRegister={register}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── App shell ───────────────────────────────────────────────
+  return (
+    <div className="app-shell">
+      {/* Sidebar backdrop (mobile) */}
+      {isSidebarOpen ? (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-label="Fechar menu"
         />
       ) : null}
 
-      {session ? (
-        <div className="content">
-          <UserSession
-            name={session.user.name}
-            syncStatus={syncStatus}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            onLogout={logout}
-          />
+      {/* Sidebar */}
+      <aside className={isSidebarOpen ? "sidebar sidebar--open" : "sidebar"}>
+        {/* Brand */}
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-logo"><ClockIcon /></div>
+          <div className="sidebar-brand-text">
+            <span className="sidebar-brand-name">Horas Extras</span>
+            <span className="sidebar-brand-sub">Controle mensal</span>
+          </div>
+        </div>
 
-          {authError ? <p className="error-message">{authError}</p> : null}
-
-          {isLoadingData ? (
-            <p className="hint">Carregando dados do servidor...</p>
-          ) : null}
-
-          <div className="workspace-grid">
+        {/* Nav */}
+        <nav className="sidebar-nav">
+          <span className="sidebar-nav-label">Menu</span>
+          {NAV_ITEMS.map(({ tab, icon, label }) => (
             <button
+              key={tab}
               type="button"
-              className={isSidebarOpen ? "menu-toggle open" : "menu-toggle"}
-              onClick={() => setIsSidebarOpen(true)}
+              className={activeTab === tab ? "sidebar-nav-item active" : "sidebar-nav-item"}
+              onClick={() => navigateToTab(tab)}
             >
-              ☰ Menu
+              <span className="sidebar-nav-icon">{icon}</span>
+              {label}
             </button>
+          ))}
+        </nav>
 
-            {isSidebarOpen ? (
+        {/* Footer — user */}
+        <div className="sidebar-footer">
+          {syncBadge ? (
+            <span className={syncBadge.cls} style={{ marginBottom: "0.5rem", display: "block" }}>
+              {syncBadge.label}
+            </span>
+          ) : null}
+          <div className="sidebar-user">
+            <div className="sidebar-user-avatar">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <div className="sidebar-user-info">
+              <span className="sidebar-user-name">{displayName}</span>
+            </div>
+            <div className="sidebar-user-actions">
               <button
                 type="button"
-                className="sidebar-backdrop"
-                onClick={() => setIsSidebarOpen(false)}
-                aria-label="Fechar menu"
-              />
-            ) : null}
+                className="sidebar-icon-btn"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? "Modo claro" : "Modo escuro"}
+                title={theme === "dark" ? "Modo claro" : "Modo escuro"}
+              >
+                {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+              </button>
+              <button
+                type="button"
+                className="sidebar-icon-btn sidebar-icon-btn--logout"
+                onClick={logout}
+                title="Sair"
+                aria-label="Sair"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
 
-            <aside
-              className={
-                isSidebarOpen ? "tabs-sidebar card open" : "tabs-sidebar card"
+      {/* Main */}
+      <div className="main-wrapper">
+        {/* Mobile topbar */}
+        <div className="topbar">
+          <button
+            type="button"
+            className="topbar-menu-btn"
+            onClick={() => setIsSidebarOpen(true)}
+            aria-label="Abrir menu"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6"  x2="21" y2="6"  />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span className="topbar-title">Horas Extras</span>
+          {syncBadge ? <span className={syncBadge.cls}>{syncBadge.label}</span> : null}
+        </div>
+
+        <main className="page-content">
+          {authError ? <p className="error-message" style={{ marginBottom: "0.75rem" }}>{authError}</p> : null}
+          {isLoadingData ? <p className="hint" style={{ marginBottom: "0.75rem" }}>Carregando dados do servidor...</p> : null}
+
+          <Routes>
+            <Route
+              path="/"
+              element={<Navigate to={`/mes/${getCurrentMonth()}`} replace />}
+            />
+
+            <Route
+              path="/config"
+              element={
+                <CalculationSettings
+                  salary={salary}
+                  onSalaryChange={setSalary}
+                  goalHours={goalHours}
+                  onGoalHoursChange={handleGoalHoursChange}
+                  models={calculationModels}
+                  onAddModel={handleAddModel}
+                  onUpdateModel={handleUpdateModel}
+                  onRemoveModel={handleRemoveModel}
+                />
               }
-            >
-              <button
-                type="button"
-                className={activeTab === "days" ? "tab-button active" : "tab-button"}
-                onClick={() => navigateToTab("days")}
-              >
-                Calcule
-              </button>
-              <button
-                type="button"
-                className={activeTab === "stats" ? "tab-button active" : "tab-button"}
-                onClick={() => navigateToTab("stats")}
-              >
-                Estatísticas
-              </button>
-              <button
-                type="button"
-                className={activeTab === "config" ? "tab-button active" : "tab-button"}
-                onClick={() => navigateToTab("config")}
-              >
-                Configuração
-              </button>
-              <button
-                type="button"
-                className={activeTab === "annual" ? "tab-button active" : "tab-button"}
-                onClick={() => navigateToTab("annual")}
-              >
-                Resumo Anual
-              </button>
-            </aside>
+            />
 
-            <section className="tab-content">
-              <Routes>
-                <Route
-                  path="/"
-                  element={<Navigate to={`/mes/${getCurrentMonth()}`} replace />}
+            <Route
+              path="/stats"
+              element={
+                <StatisticsPanel
+                  dayHours={dayHoursChart}
+                  projectHours={projectHoursChart}
+                  projectSummary={projectSummary}
+                  averageDailyHours={averageDailyHours}
+                  workedDaysCount={dayHoursChart.length}
                 />
+              }
+            />
 
-                <Route
-                  path="/config"
-                  element={
-                    <CalculationSettings
-                      salary={salary}
-                      onSalaryChange={setSalary}
-                      goalHours={goalHours}
-                      onGoalHoursChange={handleGoalHoursChange}
-                      models={calculationModels}
-                      onAddModel={handleAddModel}
-                      onUpdateModel={handleUpdateModel}
-                      onRemoveModel={handleRemoveModel}
-                    />
-                  }
+            <Route
+              path="/anual/:year"
+              element={
+                <AnnualSummary
+                  year={annualYear}
+                  months={annualMonths}
+                  isLoading={isLoadingAnnual}
+                  onYearChange={setAnnualYear}
                 />
+              }
+            />
 
-                <Route
-                  path="/stats"
-                  element={
-                    <StatisticsPanel
-                      dayHours={dayHoursChart}
-                      projectHours={projectHoursChart}
-                      projectSummary={projectSummary}
-                      averageDailyHours={averageDailyHours}
-                      workedDaysCount={dayHoursChart.length}
-                    />
-                  }
-                />
+            <Route
+              path="/geral"
+              element={
+                <div className="days-layout">
+                  <div className="view-mode-toggle">
+                    <button
+                      type="button"
+                      className="view-mode-button"
+                      onClick={() => navigate(`/mes/${selectedMonth}`)}
+                    >
+                      Mensal
+                    </button>
+                    <button
+                      type="button"
+                      className="view-mode-button active"
+                      onClick={() => { navigate("/geral"); setGeralPage(0); }}
+                    >
+                      Resumo Geral
+                    </button>
+                  </div>
 
-                <Route
-                  path="/anual/:year"
-                  element={
-                    <AnnualSummary
-                      year={annualYear}
-                      months={annualMonths}
-                      isLoading={isLoadingAnnual}
-                      onYearChange={setAnnualYear}
-                    />
-                  }
-                />
-
-                <Route
-                  path="/geral"
-                  element={
-                    <div className="days-layout">
-                      <div className="view-mode-toggle">
-                        <button
-                          type="button"
-                          className="view-mode-button"
-                          onClick={() => navigate(`/mes/${selectedMonth}`)}
-                        >
-                          Mensal
-                        </button>
-                        <button
-                          type="button"
-                          className="view-mode-button active"
-                          onClick={() => {
-                            navigate("/geral");
-                            setGeralPage(0);
-                          }}
-                        >
-                          Resumo Geral
-                        </button>
-                      </div>
-
-                      {isLoadingGeral ? (
-                        <p className="hint">Carregando todos os registros...</p>
-                      ) : geralError ? (
-                        <p className="error-message">{geralError}</p>
-                      ) : geralPagedDays.length === 0 ? (
-                        <div className="empty-state">
-                          <span className="empty-state-icon" aria-hidden="true">📋</span>
-                          <p className="empty-state-title">Nenhum registro encontrado</p>
-                          <p className="empty-state-hint">Adicione dias no modo Mensal para ver o resumo geral.</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="geral-toolbar">
-                            <Summary totals={geralTotals} />
-                            <button
-                              type="button"
-                              className="export-csv-button"
-                              onClick={handleExportGeralCsv}
-                            >
-                              Exportar CSV
-                            </button>
-                          </div>
-
-                          <DaysList
-                            days={geralPagedDays}
-                            calculationModels={calculationModels}
-                            dayValuesById={geralDayValuesById}
-                            projectNames={[]}
-                            filterProject={null}
-                            filterOptions={[]}
-                            onFilterChange={() => {}}
-                            onEditDay={handleDayEdit}
-                            onRemoveDay={handleRemoveDayWithUndo}
-                            onAddDay={handleAddDay}
-                            readOnly
-                            noReverse
-                          />
-
-                          {geralTotalPages > 1 ? (
-                            <div className="pagination">
-                              <button
-                                type="button"
-                                className="pagination-button"
-                                disabled={geralPage === 0}
-                                onClick={() => setGeralPage((p) => p - 1)}
-                              >
-                                ‹ Anterior
-                              </button>
-                              <span className="pagination-info">
-                                {geralPage + 1} / {geralTotalPages}
-                              </span>
-                              <button
-                                type="button"
-                                className="pagination-button"
-                                disabled={geralPage >= geralTotalPages - 1}
-                                onClick={() => setGeralPage((p) => p + 1)}
-                              >
-                                Próximo ›
-                              </button>
-                            </div>
-                          ) : null}
-                        </>
-                      )}
+                  {isLoadingGeral ? (
+                    <p className="hint">Carregando todos os registros...</p>
+                  ) : geralError ? (
+                    <p className="error-message">{geralError}</p>
+                  ) : geralPagedDays.length === 0 ? (
+                    <div className="empty-state">
+                      <span className="empty-state-icon" aria-hidden="true">📋</span>
+                      <p className="empty-state-title">Nenhum registro encontrado</p>
+                      <p className="empty-state-hint">Adicione dias no modo Mensal para ver o resumo geral.</p>
                     </div>
-                  }
-                />
-
-                <Route
-                  path="/mes/:month"
-                  element={
-                    <div className="days-layout">
-                      <div className="view-mode-toggle">
+                  ) : (
+                    <>
+                      <div className="geral-toolbar">
+                        <Summary totals={geralTotals} />
                         <button
                           type="button"
-                          className="view-mode-button active"
-                          onClick={() => navigate(`/mes/${selectedMonth}`)}
+                          className="export-csv-button"
+                          onClick={handleExportGeralCsv}
                         >
-                          Mensal
+                          Exportar CSV
                         </button>
-                        <button
-                          type="button"
-                          className="view-mode-button"
-                          onClick={() => {
-                            navigate("/geral");
-                            setGeralPage(0);
-                          }}
-                        >
-                          Resumo Geral
-                        </button>
-                      </div>
-
-                      <MonthNavigator
-                        value={selectedMonth}
-                        onChange={setSelectedMonth}
-                        totalHours={totals.totalHours}
-                        totalValue={totals.totalValue}
-                      />
-
-                      <div className="fix-buckets-row">
-                        <button
-                          type="button"
-                          className="fix-buckets-button"
-                          onClick={handleFixBuckets}
-                          title="Corrige registros salvos no mês errado, movendo cada dia para o mês correspondente à sua data"
-                        >
-                          Corrigir registros no mês errado
-                        </button>
-                      </div>
-
-                      <div className="days-overview-grid">
-                        <Summary
-                          totals={totals}
-                          dayCount={dayHoursChart.length}
-                          selectedMonth={selectedMonth}
-                          salary={salary}
-                          goalHours={goalHours}
-                        />
-
-                        <ProjectSummaryCard
-                          projectSummary={projectSummary}
-                          calculationModels={calculationModels}
-                          pendingModelChange={pendingModelChange}
-                          onOpenModelChange={(label, modelId) =>
-                            setPendingModelChange({
-                              projectLabel: label,
-                              newModelId: modelId,
-                            })
-                          }
-                          onUpdatePendingModel={(newModelId) =>
-                            setPendingModelChange((prev) =>
-                              prev ? { ...prev, newModelId } : prev,
-                            )
-                          }
-                          onConfirmModelChange={handleConfirmProjectModelChange}
-                          onCancelModelChange={() => setPendingModelChange(null)}
-                          onDownloadPdf={handleDownloadProjectPdf}
-                        />
                       </div>
 
                       <DaysList
-                        days={
-                          filterProject === null
-                            ? days
-                            : days.filter(
-                                (d) =>
-                                  (d.projectWorked.trim() || "Sem projeto") ===
-                                  filterProject,
-                              )
-                        }
+                        days={geralPagedDays}
                         calculationModels={calculationModels}
-                        dayValuesById={dayValuesById}
-                        salary={salary}
-                        projectNames={projectNames}
-                        filterProject={filterProject}
-                        filterOptions={projectSummary.map((item) => item.label)}
-                        selectedMonth={selectedMonth}
-                        onFilterChange={setFilterProject}
+                        dayValuesById={geralDayValuesById}
+                        projectNames={[]}
+                        filterProject={null}
+                        filterOptions={[]}
+                        onFilterChange={() => {}}
                         onEditDay={handleDayEdit}
                         onRemoveDay={handleRemoveDayWithUndo}
                         onAddDay={handleAddDay}
-                        onMonthChange={setSelectedMonth}
+                        readOnly
+                        noReverse
                       />
-                    </div>
-                  }
-                />
-              </Routes>
-            </section>
-          </div>
-        </div>
-      ) : null}
+
+                      {geralTotalPages > 1 ? (
+                        <div className="pagination">
+                          <button
+                            type="button"
+                            className="pagination-button"
+                            disabled={geralPage === 0}
+                            onClick={() => setGeralPage((p) => p - 1)}
+                          >
+                            ‹ Anterior
+                          </button>
+                          <span className="pagination-info">
+                            {geralPage + 1} / {geralTotalPages}
+                          </span>
+                          <button
+                            type="button"
+                            className="pagination-button"
+                            disabled={geralPage >= geralTotalPages - 1}
+                            onClick={() => setGeralPage((p) => p + 1)}
+                          >
+                            Próximo ›
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              }
+            />
+
+            <Route
+              path="/mes/:month"
+              element={
+                <div className="days-layout">
+                  <div className="view-mode-toggle">
+                    <button
+                      type="button"
+                      className="view-mode-button active"
+                      onClick={() => navigate(`/mes/${selectedMonth}`)}
+                    >
+                      Mensal
+                    </button>
+                    <button
+                      type="button"
+                      className="view-mode-button"
+                      onClick={() => { navigate("/geral"); setGeralPage(0); }}
+                    >
+                      Resumo Geral
+                    </button>
+                  </div>
+
+                  <MonthNavigator
+                    value={selectedMonth}
+                    onChange={setSelectedMonth}
+                    totalHours={totals.totalHours}
+                    totalValue={totals.totalValue}
+                    dayCount={dayHoursChart.length}
+                    salary={salary}
+                    goalHours={goalHours}
+                  />
+
+                  <ProjectSummaryCard
+                    projectSummary={projectSummary}
+                    calculationModels={calculationModels}
+                    pendingModelChange={pendingModelChange}
+                    onOpenModelChange={(label, modelId) =>
+                      setPendingModelChange({ projectLabel: label, newModelId: modelId })
+                    }
+                    onUpdatePendingModel={(newModelId) =>
+                      setPendingModelChange((prev) =>
+                        prev ? { ...prev, newModelId } : prev,
+                      )
+                    }
+                    onConfirmModelChange={handleConfirmProjectModelChange}
+                    onCancelModelChange={() => setPendingModelChange(null)}
+                    onDownloadPdf={handleDownloadProjectPdf}
+                  />
+
+                  <DaysList
+                    days={
+                      filterProject === null
+                        ? days
+                        : days.filter(
+                            (d) =>
+                              (d.projectWorked.trim() || "Sem projeto") === filterProject,
+                          )
+                    }
+                    calculationModels={calculationModels}
+                    dayValuesById={dayValuesById}
+                    salary={salary}
+                    projectNames={projectNames}
+                    filterProject={filterProject}
+                    filterOptions={projectSummary.map((item) => item.label)}
+                    selectedMonth={selectedMonth}
+                    onFilterChange={setFilterProject}
+                    onEditDay={handleDayEdit}
+                    onRemoveDay={handleRemoveDayWithUndo}
+                    onAddDay={handleAddDay}
+                    onMonthChange={setSelectedMonth}
+                  />
+                </div>
+              }
+            />
+          </Routes>
+        </main>
+      </div>
 
       {undoToast ? (
         <div className="undo-toast" role="status">
@@ -619,7 +721,7 @@ function App() {
           </button>
         </div>
       ) : null}
-    </main>
+    </div>
   );
 }
 

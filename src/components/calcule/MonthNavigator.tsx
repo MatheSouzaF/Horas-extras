@@ -5,6 +5,9 @@ type MonthNavigatorProps = {
   onChange: (month: string) => void;
   totalHours: number;
   totalValue: number;
+  dayCount?: number;
+  salary?: number;
+  goalHours?: number;
 };
 
 const brlFormatter = new Intl.NumberFormat("pt-BR", {
@@ -27,6 +30,9 @@ export function MonthNavigator({
   onChange,
   totalHours,
   totalValue,
+  dayCount,
+  salary,
+  goalHours,
 }: MonthNavigatorProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -93,15 +99,34 @@ export function MonthNavigator({
 
       {(totalHours > 0 || totalValue > 0) ? (
         <div className="month-navigator-totals">
-          <span className="month-navigator-stat">
+          <div className="month-navigator-col">
+            <span className="month-navigator-stat-label">Horas trabalhadas</span>
             <span className="month-navigator-stat-value">{totalHours.toFixed(1)}h</span>
-            <span className="month-navigator-stat-label">trabalhadas</span>
-          </span>
+            {dayCount !== undefined && dayCount > 0 ? (
+              <span className="month-navigator-stat-sub">{dayCount} dia{dayCount !== 1 ? "s" : ""}</span>
+            ) : null}
+            {goalHours && goalHours > 0 ? (
+              <div className="goal-progress month-navigator-goal">
+                <div className="goal-progress-track">
+                  <div
+                    className="goal-progress-fill"
+                    style={{ width: `${Math.min(totalHours / goalHours, 1) * 100}%` }}
+                  />
+                </div>
+                <span className="goal-progress-label">
+                  {Math.round(Math.min(totalHours / goalHours, 1) * 100)}% da meta de {goalHours}h
+                </span>
+              </div>
+            ) : null}
+          </div>
           <span className="month-navigator-totals-sep" aria-hidden="true" />
-          <span className="month-navigator-stat">
+          <div className="month-navigator-col">
+            <span className="month-navigator-stat-label">Total calculado</span>
             <span className="month-navigator-stat-value">{brlFormatter.format(totalValue)}</span>
-            <span className="month-navigator-stat-label">calculado</span>
-          </span>
+            {salary !== undefined && salary > 0 ? (
+              <span className="month-navigator-stat-sub">{brlFormatter.format(salary)} ÷ 160h</span>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="month-navigator-totals month-navigator-totals--empty">

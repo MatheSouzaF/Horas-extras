@@ -39,6 +39,7 @@ const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
 const isProduction = process.env.NODE_ENV === "production";
+const refreshCookiePath = process.env.REFRESH_COOKIE_PATH ?? "/auth/refresh";
 
 const setAuthCookies = (
   response: Response,
@@ -56,7 +57,7 @@ const setAuthCookies = (
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: "/auth/refresh",
+    path: refreshCookiePath,
   });
 };
 
@@ -302,7 +303,7 @@ authRoutes.post("/logout", async (request, response) => {
 
   const clearCookies = () => {
     response.clearCookie("access_token");
-    response.clearCookie("refresh_token", { path: "/auth/refresh" });
+    response.clearCookie("refresh_token", { path: refreshCookiePath });
   };
 
   if (refreshToken) {

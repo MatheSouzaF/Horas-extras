@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
@@ -39,3 +39,12 @@ app.use("/auth/login", authLimiter);
 app.use("/auth/register", authLimiter);
 app.use("/auth", authRoutes);
 app.use("/hours", hoursRoutes);
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ message: "JSON inválido no corpo da requisição." });
+  }
+  console.error(err);
+  return res.status(500).json({ message: "Erro interno do servidor." });
+});

@@ -22,6 +22,7 @@ const getCurrentMonth = () => {
 
 const pageSchema = z.coerce.number().int().min(0).default(0);
 const limitSchema = z.coerce.number().int().min(1).max(100).default(20);
+const limitExportSchema = z.coerce.number().int().min(1).max(10000).default(20);
 
 export const hoursRoutes = Router();
 
@@ -77,7 +78,7 @@ hoursRoutes.get(
       return response.status(401).json({ message: "Não autenticado." });
 
     const page = pageSchema.parse(request.query.page);
-    const limit = limitSchema.parse(request.query.limit);
+    const limit = limitExportSchema.parse(request.query.limit);
 
     const data = await getAllDays(userId, page, limit);
     return response.status(200).json(data);

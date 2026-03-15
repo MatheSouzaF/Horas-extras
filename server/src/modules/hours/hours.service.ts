@@ -85,7 +85,7 @@ export async function saveMonthlyRecord(
 }
 
 export async function getAllDays(userId: string, page: number, limit: number) {
-  const [total, entries] = await Promise.all([
+  const [total, entries, allEntries] = await Promise.all([
     prisma.dayEntry.count({
       where: { monthlyRecord: { userId } },
     }),
@@ -95,6 +95,10 @@ export async function getAllDays(userId: string, page: number, limit: number) {
       orderBy: { date: "desc" },
       skip: page * limit,
       take: limit,
+    }),
+    prisma.dayEntry.findMany({
+      where: { monthlyRecord: { userId } },
+      include: { monthlyRecord: true },
     }),
   ]);
 
@@ -132,6 +136,27 @@ export async function getAllDays(userId: string, page: number, limit: number) {
     mostRecentRecord?.modelsJson,
   );
 
+  let globalTotalHours = 0;
+  let globalTotalValue = 0;
+  for (const entry of allEntries) {
+    const models = parseStoredCalculationModels(entry.monthlyRecord.modelsJson);
+    const valorHora =
+      entry.monthlyRecord.salary > 0 ? entry.monthlyRecord.salary / 160 : 0;
+    const dateStr = entry.date.toISOString().slice(0, 10);
+    const hours = calculateWorkedHours(entry.startTime, entry.endTime);
+    if (hours > 0) {
+      globalTotalHours += hours;
+      globalTotalValue += getDayValue(
+        dateStr,
+        entry.startTime,
+        entry.endTime,
+        entry.calculationModelId,
+        models,
+        valorHora,
+      );
+    }
+  }
+
   return {
     salary: mostRecentRecord?.salary ?? 0,
     calculationModels: storedModels,
@@ -139,6 +164,8 @@ export async function getAllDays(userId: string, page: number, limit: number) {
     total,
     page,
     hasMore: page * limit + days.length < total,
+    totalHours: globalTotalHours,
+    totalValue: globalTotalValue,
   };
 }
 
