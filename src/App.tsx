@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -88,7 +88,7 @@ function ClockIcon() {
   );
 }
 
-const NAV_ITEMS: { tab: AppTab; icon: JSX.Element; label: string }[] = [
+const NAV_ITEMS: { tab: AppTab; icon: ReturnType<() => React.ReactElement>; label: string }[] = [
   { tab: "days",   icon: <CalcIcon />,     label: "Calcule" },
   { tab: "stats",  icon: <ChartIcon />,    label: "Estatísticas" },
   { tab: "annual", icon: <CalendarIcon />, label: "Resumo Anual" },
