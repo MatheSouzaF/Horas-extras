@@ -60,7 +60,8 @@
       "Bash(ps -p 65769 -o pid,lstart,cmd --no-headers)",
       "Bash(kill 65769)",
       "Bash(curl -s \"http://localhost:3333/hours/all?page=0&limit=5\" -b /tmp/horas_cookies.txt)",
-      "Bash(curl -sv http://localhost:3333/)"
+      "Bash(curl -sv http://localhost:3333/)",
+      "Bash(git restore:*)"
     ]
   }
 }
