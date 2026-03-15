@@ -41,7 +41,7 @@ app.use("/auth", authRoutes);
 app.use("/hours", hoursRoutes);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: Error & { type?: string }, _req: Request, res: Response, _next: NextFunction) => {
   if (err.type === "entity.parse.failed") {
     return res.status(400).json({ message: "JSON inválido no corpo da requisição." });
   }
